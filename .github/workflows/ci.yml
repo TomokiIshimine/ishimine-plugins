@@ -1,0 +1,111 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  manifests:
+    name: Validate marketplace and plugins
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: claude plugin validate (marketplace)
+        run: npx -y @anthropic-ai/claude-code@2.1.318 plugin validate .
+      - name: claude plugin validate (each plugin)
+        run: |
+          for d in plugins/*/; do
+            echo "::group::$d"
+            npx -y @anthropic-ai/claude-code@2.1.318 plugin validate "$d"
+            echo "::endgroup::"
+          done
+      - name: Consistency checks (versions, skill and agent front matter)
+        run: |
+          pip install pyyaml==6.0.3
+          python .github/scripts/check_manifests.py
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: ruff
+        run: |
+          pip install ruff==0.16.9
+          ruff check --output-format=github .
+      - name: shellcheck
+        run: shellcheck plugins/*/runtime/*.sh .github/scripts/*.sh
+
+  print3d-smoke:
+    name: print3d-modeler end to end (Python ${{ matrix.python }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        # Oldest version setup_env.sh accepts, and the newest one.
+        python: ["3.10", "3.13"]
+    env:
+      CLAUDE_PLUGIN_DATA: ${{ github.workspace }}/.p3d-data
+      WORK: ${{ github.workspace }}/.p3d-work
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: plugins/print3d-modeler/runtime/requirements.txt
+      - name: Set up the runtime with setup_env.sh (as the plugin does)
+        id: setup
+        run: |
+          out="$(bash plugins/print3d-modeler/runtime/setup_env.sh)"
+          echo "$out"
+          py="$(echo "$out" | tail -n 1 | python -c 'import json, sys; print(json.load(sys.stdin)["python"])')"
+          echo "python=$py" >> "$GITHUB_OUTPUT"
+      - name: setup_env.sh is quick on a second run
+        run: timeout 60 bash plugins/print3d-modeler/runtime/setup_env.sh > /dev/null
+      - name: Build the sample model and run every p3d CLI
+        run: .github/scripts/smoke_print3d.sh "${{ steps.setup.outputs.python }}" "$WORK"
+      - name: Install headless Chromium
+        if: matrix.python == '3.13'
+        run: |
+          "${{ steps.setup.outputs.python }}" -m pip install -q playwright==1.63.0
+          "${{ steps.setup.outputs.python }}" -m playwright install --with-deps chromium
+      - name: Open the generated viewers in Chromium
+        if: matrix.python == '3.13'
+        run: >-
+          "${{ steps.setup.outputs.python }}" .github/scripts/check_viewer.py
+          "$WORK/phone-stand/viewer.ja.html" ja
+          "$WORK/phone-stand/viewer.html" en
+      - name: Upload the sample outputs
+        if: always() && matrix.python == '3.13'
+        uses: actions/upload-artifact@v4
+        with:
+          name: print3d-sample-phone-stand
+          path: |
+            ${{ env.WORK }}/phone-stand/*.html
+            ${{ env.WORK }}/phone-stand/*.png
+            ${{ env.WORK }}/phone-stand/*.json
+            ${{ env.WORK }}/phone-stand/out/final/
+          if-no-files-found: ignore
+          retention-days: 14
