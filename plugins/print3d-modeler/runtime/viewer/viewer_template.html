@@ -5,97 +5,203 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>3D Model Viewer</title>
 <style>
+  /* Design notes
+     - The stage is a quiet, cool neutral so arbitrary part colors and the red/green/blue axis colors stay readable.
+     - Selected states use the graphite ink (not a hue), because red, green and blue already mean directions
+       and red/blue mean support/bed faces. Amber is the one signal color: hover and focus.
+     - The memorable element is the title block at the bottom left, borrowed from engineering drawings:
+       model name, overall size, part count and build time in ruled cells. */
   :root {
-    --bg: #eef1f4; --panel: #ffffff; --stage: #dfe4e9; --ink: #1a222b; --muted: #5a6876; --line: #d3dae1;
-    --accent: #d9611c; --accent-ink: #ffffff; --accent-soft: #fbe7da; --chip: #f2f4f7;
-    --ax-x: #c93c3c; --ax-y: #23894f; --ax-z: #2c64c6; --contact: #2f78bd;
+    --stage: #e4e8eb; --stage-glow: #f4f6f7; --surface: #ffffff; --surface-2: #f1f3f5;
+    --ink: #1d242b; --ink-soft: #3a444e; --muted: #67727d; --line: #d4d9de; --line-strong: #b9c1c9;
+    --signal: #e9a400; --signal-soft: #fdf3d6;
+    --ax-x: #c93c3c; --ax-y: #23894f; --ax-z: #2c64c6; --support: #e03131; --contact: #2f78bd;
+    --bed: #c9d0d6; --grid-minor: #b6bfc8; --grid-major: #8f9aa6; --volume: #8a94a8;
+    --shadow: 0 1px 2px rgba(22, 30, 38, .08), 0 4px 14px rgba(22, 30, 38, .08);
+    --radius: 8px;
   }
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --bg: #12171d; --panel: #192029; --stage: #1d252e; --ink: #e4e9ee; --muted: #93a1ae; --line: #2b3540;
-      --accent: #f0813f; --accent-ink: #1a120c; --accent-soft: #3a2416; --chip: #222b35;
-      --ax-x: #ec6a6a; --ax-y: #4fc483; --ax-z: #6b9cf0; --contact: #5aa2e6;
+      --stage: #171c21; --stage-glow: #232a31; --surface: #1d2329; --surface-2: #262e35;
+      --ink: #e6eaee; --ink-soft: #c5ccd3; --muted: #96a1ab; --line: #323b44; --line-strong: #4b5560;
+      --signal: #f5c042; --signal-soft: #3b3018;
+      --ax-x: #ec6a6a; --ax-y: #4fc483; --ax-z: #6b9cf0; --support: #f05252; --contact: #5aa2e6;
+      --bed: #2a3239; --grid-minor: #343d46; --grid-major: #4f5a65; --volume: #6c778a;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 6px 18px rgba(0, 0, 0, .3);
     }
   }
   :root[data-theme="dark"] {
-    --bg: #12171d; --panel: #192029; --stage: #1d252e; --ink: #e4e9ee; --muted: #93a1ae; --line: #2b3540;
-    --accent: #f0813f; --accent-ink: #1a120c; --accent-soft: #3a2416; --chip: #222b35;
-    --ax-x: #ec6a6a; --ax-y: #4fc483; --ax-z: #6b9cf0; --contact: #5aa2e6;
+    --stage: #171c21; --stage-glow: #232a31; --surface: #1d2329; --surface-2: #262e35;
+    --ink: #e6eaee; --ink-soft: #c5ccd3; --muted: #96a1ab; --line: #323b44; --line-strong: #4b5560;
+    --signal: #f5c042; --signal-soft: #3b3018;
+    --ax-x: #ec6a6a; --ax-y: #4fc483; --ax-z: #6b9cf0; --support: #f05252; --contact: #5aa2e6;
+    --bed: #2a3239; --grid-minor: #343d46; --grid-major: #4f5a65; --volume: #6c778a;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 6px 18px rgba(0, 0, 0, .3);
   }
   * { box-sizing: border-box; }
-  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink);
-    font-family: system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", "Meiryo", sans-serif; font-size: 14px; }
+  html, body { margin: 0; height: 100%; background: var(--stage); color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", "Meiryo", sans-serif;
+    font-size: 14px; line-height: 1.4; -webkit-font-smoothing: antialiased; }
   html:lang(ja) body { font-family: "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", "Meiryo", system-ui, sans-serif; }
-  #app { display: grid; grid-template-columns: minmax(0, 1fr) 0; height: 100vh; }
-  #app.open { grid-template-columns: minmax(0, 1fr) 320px; }
-  main { position: relative; overflow: hidden; background: var(--stage); }
-  aside { background: var(--panel); border-left: 1px solid var(--line); overflow-y: auto; padding: 14px 14px 28px; display: none; }
-  #app.open aside { display: block; }
-  h1 { font-size: 15px; margin: 0 0 2px; }
-  h2 { font-size: 12px; color: var(--muted); font-weight: 700; letter-spacing: .04em; margin: 18px 0 6px;
-    display: flex; align-items: center; justify-content: space-between; }
-  .sub { color: var(--muted); font-size: 12px; }
-  button { font: inherit; }
-  .chip { border: 1px solid var(--line); background: var(--panel); color: var(--ink); border-radius: 999px;
-    padding: 4px 11px; font-size: 12px; cursor: pointer; }
-  .chip:hover { border-color: var(--accent); }
-  .chip[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-  .mini { border: 1px solid var(--line); background: var(--chip); color: var(--ink); border-radius: 6px;
-    padding: 1px 7px; font-size: 11px; cursor: pointer; font-weight: 400; letter-spacing: 0; }
-  .mini:hover { border-color: var(--accent); }
+  button { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--signal); outline-offset: 2px; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* ---------- layout: 3D stage on the left, panel on the right (closed at first) */
+  #app { display: grid; grid-template-columns: minmax(0, 1fr) 0px; height: 100vh; transition: grid-template-columns .22s ease; }
+  #app.open { grid-template-columns: minmax(0, 1fr) 340px; }
+  main { position: relative; overflow: hidden;
+    background: radial-gradient(120% 90% at 50% 38%, var(--stage-glow) 0%, var(--stage) 72%); }
+  aside { background: var(--surface); border-left: 1px solid var(--line); overflow: hidden; visibility: hidden;
+    transition: visibility 0s linear .22s; }
+  #app.open aside { visibility: visible; transition-delay: 0s; }
+  .drawer { width: 340px; height: 100%; overflow-y: auto; padding: 16px 18px 32px; }
+
+  /* ---------- floating controls on the stage */
+  .bar { display: inline-flex; align-items: center; gap: 2px; padding: 3px; background: var(--surface);
+    border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); }
+  .bar button { border: 0; background: transparent; padding: 5px 11px; border-radius: 7px; cursor: pointer;
+    font-size: 13px; white-space: nowrap; color: var(--ink-soft); }
+  .bar button:hover { background: var(--surface-2); color: var(--ink); }
+  .bar button[aria-pressed="true"] { background: var(--ink); color: var(--surface); font-weight: 600; }
+  #toolbar { position: absolute; top: 14px; left: 14px; right: 170px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  #panelBtn { position: absolute; top: 14px; right: 14px; display: inline-flex; align-items: center; gap: 7px;
+    border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 7px 12px;
+    font-size: 13px; cursor: pointer; box-shadow: var(--shadow); color: var(--ink); }
+  #panelBtn:hover { border-color: var(--line-strong); }
+  #panelBtn svg { width: 16px; height: 16px; flex: none; }
+  #panelBtn kbd { font: inherit; font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 4px;
+    padding: 0 5px; line-height: 16px; }
+  #panelBtn[aria-expanded="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+  #panelBtn[aria-expanded="true"] kbd { color: inherit; border-color: color-mix(in srgb, var(--surface) 40%, transparent); }
+
+  /* title block (engineering-drawing style) */
+  /* bottom-left corner: mouse hint stacked above the title block */
+  #corner { position: absolute; left: 14px; bottom: 14px; right: 150px; display: flex; flex-direction: column;
+    align-items: flex-start; gap: 8px; pointer-events: none; }
+  #corner > * { pointer-events: auto; }
+  #titleBlock { min-width: 250px; max-width: 380px;
+    background: color-mix(in srgb, var(--surface) 92%, transparent); backdrop-filter: blur(6px);
+    border: 1.5px solid var(--ink); border-radius: 3px; box-shadow: var(--shadow); }
+  #titleBlock h1 { margin: 0; padding: 7px 11px 6px; font-size: 15px; font-weight: 700; letter-spacing: .01em;
+    border-bottom: 1px solid var(--ink); overflow-wrap: anywhere; }
+  #titleBlock dl { margin: 0; display: grid; grid-template-columns: auto auto auto; }
+  #titleBlock dl > div { padding: 5px 11px 6px; min-width: 0; }
+  #titleBlock dl > div + div { border-left: 1px solid var(--line-strong); }
+  #titleBlock dt { font-size: 11px; color: var(--muted); }
+  #titleBlock dd { margin: 1px 0 0; font-size: 13px; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  #titleBlock dd small { font-weight: 400; color: var(--muted); font-size: 11px; }
+
+  /* mouse hint: shown at first, folds into a "?" after the first drag or when the panel opens; hover or focus opens it again */
+  #hint { display: flex; align-items: flex-start; max-width: min(380px, 100%);
+    background: color-mix(in srgb, var(--surface) 90%, transparent); border: 1px solid var(--line); border-radius: 14px;
+    box-shadow: var(--shadow); font-size: 12px; color: var(--muted); }
+  #hint .q { flex: none; width: 28px; height: 28px; border: 0; background: none; border-radius: 50%; cursor: help;
+    font-weight: 700; color: var(--ink-soft); }
+  #hint ul { list-style: none; margin: 0; padding: 6px 14px 6px 0; display: flex; flex-wrap: wrap; gap: 2px 14px; }
+  #hint li { white-space: nowrap; }
+  #hint li b { color: var(--ink); font-weight: 600; margin-right: 4px; }
+  #hint.folded ul { display: none; }
+  #hint.folded:hover ul, #hint.folded:focus-within ul { display: flex; }
+
+  #gizmo { position: absolute; right: 14px; bottom: 14px; width: 116px; height: 116px; border-radius: 50%;
+    background: color-mix(in srgb, var(--surface) 82%, transparent); border: 1px solid var(--line);
+    box-shadow: var(--shadow); cursor: pointer; }
+
+  /* ---------- labels drawn over the 3D view */
+  #view { position: absolute; inset: 0; }
+  /* z-index makes a stacking context, so the labels (depth-sorted by CSS2DRenderer) stay under the controls */
+  #labels { position: absolute; inset: 0; pointer-events: none; z-index: 0; }
+  .lbl { pointer-events: auto; display: inline-flex; align-items: baseline; gap: 5px; background: var(--surface); color: var(--ink);
+    border: 1px solid var(--line); border-left: 4px solid; border-radius: 5px; padding: 2px 8px 2px 6px;
+    font-size: 12.5px; font-weight: 600; white-space: nowrap; box-shadow: 0 1px 3px rgba(20, 28, 36, .2); }
+  .lbl small { color: var(--muted); font-weight: 600; font-size: 11px; font-variant-numeric: tabular-nums; }
+  .lbl.dim { opacity: .3; }
+  .behind { opacity: .45; border-style: dashed !important; }
+  .feat { pointer-events: auto; background: var(--surface); border: 1.5px dashed var(--muted); border-radius: 5px;
+    padding: 1px 7px; font-size: 12px; color: var(--ink); white-space: nowrap; }
+  .dir { display: inline-flex; align-items: baseline; gap: 5px; font-weight: 700; font-size: 14px; padding: 3px 9px;
+    border-radius: 5px; color: #fff; pointer-events: none; box-shadow: 0 1px 3px rgba(0, 0, 0, .25); }
+  .dir small { font-size: 11px; font-weight: 600; opacity: .85; font-variant-numeric: tabular-nums; }
+  .coin { background: var(--surface); border: 1px solid var(--line); border-radius: 5px; padding: 1px 6px; font-size: 11px;
+    color: var(--muted); white-space: nowrap; }
+  #tip { position: absolute; z-index: 5; pointer-events: none; background: var(--surface); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 8px 11px 9px; font-size: 12px; box-shadow: var(--shadow); display: none; max-width: 280px; }
+  #tip .t { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; }
+  #tip .t i { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+  #tip .t small { color: var(--muted); font-weight: 600; font-variant-numeric: tabular-nums; }
+  #tip p { margin: 3px 0 0; color: var(--ink-soft); }
+  #tip .m { margin-top: 4px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  #err { position: absolute; inset: 0; display: none; place-items: center; padding: 24px; text-align: center; color: var(--muted); }
+
+  /* ---------- panel contents */
+  .sec + .sec { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
+  h2 { font-size: 13px; font-weight: 700; margin: 0 0 8px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .mini { border: 1px solid var(--line); background: var(--surface); border-radius: 6px; padding: 1px 8px;
+    font-size: 11.5px; font-weight: 400; cursor: pointer; color: var(--ink-soft); }
+  .mini:hover { border-color: var(--line-strong); color: var(--ink); }
   /* part visibility tree */
-  .obj { margin-bottom: 4px; }
-  .row { display: flex; align-items: center; gap: 7px; padding: 4px 6px; border-radius: 6px; }
-  .row:hover, .row.hl { background: var(--chip); }
-  .row input { margin: 0; flex: none; accent-color: var(--accent); width: 15px; height: 15px; cursor: pointer; }
-  .row .name { cursor: pointer; flex: 1; min-width: 0; }
-  .row .sw { width: 11px; height: 11px; border-radius: 3px; flex: none; }
-  .row .pid { font-weight: 700; font-size: 11px; color: var(--muted); min-width: 22px; }
-  .row .dims { display: block; color: var(--muted); font-size: 11px; }
+  .obj + .obj { margin-top: 2px; }
+  .row { position: relative; display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 6px; }
+  .row:hover { background: var(--surface-2); }
+  .row.hl { background: var(--signal-soft); box-shadow: inset 3px 0 0 var(--signal); }
+  .row input { margin: 0; flex: none; accent-color: var(--ink); width: 15px; height: 15px; cursor: pointer; }
+  .row .name { cursor: pointer; flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .row .sw { width: 10px; height: 10px; border-radius: 3px; flex: none; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .12); }
+  .row .pid { font-weight: 600; font-size: 11px; color: var(--muted); min-width: 20px; font-variant-numeric: tabular-nums; }
+  .row .dims { display: block; color: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
   .row .only { visibility: hidden; }
-  .row:hover .only { visibility: visible; }
+  .row:hover .only, .row:focus-within .only { visibility: visible; }
   .obj > .row.head { font-weight: 700; }
-  .obj > .row .cnt { color: var(--muted); font-weight: 400; font-size: 11px; }
-  .caret { width: 16px; flex: none; border: 0; background: none; color: var(--muted); cursor: pointer; padding: 0; font-size: 11px; }
-  .kids { padding-left: 22px; }
+  .obj > .row .cnt { color: var(--muted); font-weight: 400; font-size: 11.5px; margin-left: 4px; }
+  .caret { width: 16px; height: 16px; flex: none; border: 0; background: none; color: var(--muted); cursor: pointer; padding: 0;
+    display: grid; place-items: center; transition: transform .15s ease; }
+  .caret svg { width: 10px; height: 10px; }
+  .kids { padding-left: 24px; }
   .obj.closed .kids { display: none; }
   .obj.closed .caret { transform: rotate(-90deg); }
-  .seg { display: inline-flex; gap: 4px; align-items: center; font-size: 12px; color: var(--muted); margin-top: 6px; }
-  label.tg { display: flex; align-items: center; gap: 7px; font-size: 13px; padding: 3px 0; cursor: pointer; }
-  label.tg input { accent-color: var(--accent); }
-  .legend { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--muted); margin-right: 10px; }
-  .legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
-  /* overlays on top of the 3D view */
-  #view { position: absolute; inset: 0; }
-  #labels { position: absolute; inset: 0; pointer-events: none; }
-  .lbl { pointer-events: auto; background: var(--panel); color: var(--ink); border: 2px solid; border-radius: 6px;
-    padding: 2px 8px; font-size: 13px; font-weight: 600; white-space: nowrap; box-shadow: 0 1px 4px rgba(0,0,0,.18); }
-  .lbl small { color: var(--muted); font-weight: 700; margin-right: 4px; }
-  .lbl.dim { opacity: .3; }
-  .behind { opacity: .5; border-style: dashed !important; }
-  .feat { pointer-events: auto; background: var(--panel); border: 1.5px dashed var(--muted); border-radius: 6px;
-    padding: 1px 7px; font-size: 12px; color: var(--ink); white-space: nowrap; }
-  .dir { font-weight: 800; font-size: 17px; padding: 2px 10px; border-radius: 6px; color: #fff; pointer-events: none; box-shadow: 0 1px 4px rgba(0,0,0,.25); }
-  .coin { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; font-size: 11px; color: var(--muted); white-space: nowrap; }
-  #toolbar { position: absolute; top: 12px; left: 12px; right: 120px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
-  #toolbar .sep { width: 1px; height: 22px; background: var(--line); margin: 0 4px; }
-  #panelBtn { position: absolute; top: 12px; right: 12px; border: 1px solid var(--line); background: var(--panel); color: var(--ink);
-    border-radius: 8px; padding: 5px 11px; font-size: 12px; cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,.12); }
-  #panelBtn:hover { border-color: var(--accent); }
-  #panelBtn[aria-expanded="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-  #gizmo { position: absolute; right: 12px; bottom: 12px; width: 120px; height: 120px; border-radius: 50%;
-    background: color-mix(in srgb, var(--panel) 80%, transparent); border: 1px solid var(--line); cursor: pointer; }
-  #hint { position: absolute; left: 12px; bottom: 12px; font-size: 12px; color: var(--muted);
-    background: color-mix(in srgb, var(--panel) 88%, transparent); padding: 6px 10px; border-radius: 6px; }
-  #tip { position: absolute; z-index: 5; pointer-events: none; background: var(--panel); border: 1px solid var(--line); border-radius: 6px;
-    padding: 6px 8px; font-size: 12px; box-shadow: 0 2px 8px rgba(0,0,0,.15); display: none; max-width: 260px; }
-  #err { position: absolute; inset: 0; display: none; place-items: center; padding: 24px; text-align: center; color: var(--muted); }
+  .ghostRow { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px;
+    font-size: 12px; color: var(--muted); }
+  .ghostRow .bar { box-shadow: none; background: var(--surface-2); border-color: transparent; }
+  .ghostRow .bar button { padding: 3px 10px; font-size: 12px; }
+  /* display toggles: swatch, text, switch */
+  .tg { display: grid; grid-template-columns: 22px 1fr auto; align-items: center; gap: 10px; padding: 7px 2px; cursor: pointer; }
+  .tg + .tg { border-top: 1px dashed var(--line); }
+  .tg .txt { font-size: 13px; }
+  .tg .txt small { display: block; color: var(--muted); font-size: 11.5px; }
+  .ico { display: grid; place-items: center; height: 18px; }
+  .ico.sq i { width: 12px; height: 12px; border-radius: 3px; display: block; }
+  .ico.tag span { font-size: 9.5px; font-weight: 700; line-height: 1; padding: 2px 3px; border-radius: 3px;
+    border: 1px solid var(--line-strong); border-left: 3px solid var(--signal); color: var(--ink-soft); }
+  .ico.axes { display: flex; gap: 2px; justify-content: center; align-items: end; }
+  .ico.axes i { width: 4px; border-radius: 1px; display: block; }
+  .ico.coin-i i { width: 14px; height: 14px; border-radius: 50%; display: block;
+    background: radial-gradient(circle at 35% 35%, #eceef1, #a9aeb5); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .15); }
+  input.switch { appearance: none; -webkit-appearance: none; margin: 0; width: 30px; height: 18px; border-radius: 9px;
+    background: var(--line-strong); position: relative; cursor: pointer; flex: none; transition: background .15s ease; }
+  input.switch::before { content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%;
+    background: var(--surface); box-shadow: 0 1px 2px rgba(0, 0, 0, .25); transition: transform .15s ease; }
+  input.switch:checked { background: var(--ink); }
+  input.switch:checked::before { transform: translateX(12px); }
+
   @media (max-width: 760px) {
-    #app, #app.open { grid-template-columns: 1fr; grid-template-rows: 70vh auto; height: auto; }
+    #app, #app.open { grid-template-columns: 1fr; grid-template-rows: 70vh auto; height: auto; transition: none; }
     main { height: 70vh; }
-    aside { border-left: none; border-top: 1px solid var(--line); }
-    #gizmo { width: 84px; height: 84px; }
+    aside { display: none; border-left: none; border-top: 1px solid var(--line); }
+    #app.open aside { display: block; }
+    .drawer { width: auto; height: auto; padding: 16px; }
+    #toolbar { right: 14px; top: 62px; }
+    #toolbar .bar { flex-wrap: wrap; }
+    #toolbar .bar button { padding: 4px 8px; font-size: 12px; }
+    #corner { right: 110px; }
     #hint { display: none; }
+    #titleBlock { min-width: 0; max-width: 100%; }
+    #titleBlock dl { grid-template-columns: auto auto; }
+    #titleBlock dl > div:nth-child(3) { display: none; }
+    #gizmo { width: 84px; height: 84px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before { transition: none !important; }
   }
 </style>
 <script>/*__THREE_BUNDLE__*/</script>
@@ -106,30 +212,56 @@
     <div id="view"></div>
     <div id="labels"></div>
     <div id="toolbar"></div>
-    <button id="panelBtn" aria-expanded="false" data-i18n-title="panelTitle"></button>
+    <button id="panelBtn" aria-expanded="false" aria-controls="panel" data-i18n-title="panelTitle">
+      <svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.75" y="2.75" width="12.5" height="10.5" rx="1.5"/><path d="M10 2.75v10.5"/></svg>
+      <span id="panelBtnText"></span><kbd>P</kbd>
+    </button>
+    <div id="corner">
+    <div id="hint"><button class="q" data-i18n-title="hintTitle" data-i18n-aria-label="hintTitle">?</button><ul id="hintList"></ul></div>
+    <section id="titleBlock" aria-labelledby="title">
+      <h1 id="title"></h1>
+      <dl>
+        <div><dt data-i18n="tbSize"></dt><dd id="tbSize"></dd></div>
+        <div><dt data-i18n="tbParts"></dt><dd id="tbParts"></dd></div>
+        <div id="tbBuiltCell"><dt data-i18n="tbBuilt"></dt><dd id="tbBuilt"></dd></div>
+      </dl>
+    </section>
+    </div>
     <canvas id="gizmo" data-i18n-title="gizmoTitle"></canvas>
-    <div id="hint" data-i18n="hint"></div>
     <div id="tip"></div>
     <div id="err"></div>
   </main>
-  <aside>
-    <h1 id="title"></h1>
-    <div class="sub" id="subtitle"></div>
+  <aside id="panel">
+    <div class="drawer">
+      <section class="sec">
+        <h2><span data-i18n="parts"></span><button class="mini" id="showAll" data-i18n="showAll"></button></h2>
+        <div id="tree"></div>
+        <div class="ghostRow"><span data-i18n="unchecked"></span>
+          <span class="bar">
+            <button data-ghost="ghost" data-i18n="ghost"></button>
+            <button data-ghost="hide" data-i18n="hide"></button>
+          </span>
+        </div>
+      </section>
 
-    <h2><span data-i18n="parts"></span><span><button class="mini" id="showAll" data-i18n="showAll"></button></span></h2>
-    <div id="tree"></div>
-    <div class="seg"><span data-i18n="unchecked"></span>
-      <button class="chip" data-ghost="ghost" data-i18n="ghost"></button>
-      <button class="chip" data-ghost="hide" data-i18n="hide"></button>
+      <section class="sec">
+        <h2><span data-i18n="display"></span></h2>
+        <label class="tg"><span class="ico tag"><span>P1</span></span><span class="txt" data-i18n="tgLabels"></span>
+          <input type="checkbox" class="switch" id="tgLabels"></label>
+        <label class="tg"><span class="ico axes"><i style="height:9px;background:var(--ax-x)"></i><i style="height:13px;background:var(--ax-y)"></i><i style="height:17px;background:var(--ax-z)"></i></span>
+          <span class="txt"><span data-i18n="tgDirs"></span><small data-i18n="tgDirsNote"></small></span>
+          <input type="checkbox" class="switch" id="tgDirs" checked></label>
+        <label class="tg"><span class="ico sq"><i style="background:var(--support)"></i></span>
+          <span class="txt"><span data-i18n="tgOver"></span><small data-i18n="tgOverNote"></small></span>
+          <input type="checkbox" class="switch" id="tgOver"></label>
+        <label class="tg"><span class="ico sq"><i style="background:var(--contact)"></i></span>
+          <span class="txt" data-i18n="tgContact"></span>
+          <input type="checkbox" class="switch" id="tgContact"></label>
+        <label class="tg"><span class="ico coin-i"><i></i></span>
+          <span class="txt"><span data-i18n="tgCoin"></span><small data-i18n="tgCoinNote"></small></span>
+          <input type="checkbox" class="switch" id="tgCoin" checked></label>
+      </section>
     </div>
-
-    <h2><span data-i18n="display"></span></h2>
-    <label class="tg"><input type="checkbox" id="tgLabels"> <span data-i18n="tgLabels"></span></label>
-    <label class="tg"><input type="checkbox" id="tgDirs" checked> <span data-i18n="tgDirs"></span></label>
-    <label class="tg"><input type="checkbox" id="tgOver"> <span data-i18n="tgOver"></span></label>
-    <label class="tg"><input type="checkbox" id="tgContact"> <span data-i18n="tgContact"></span></label>
-    <label class="tg"><input type="checkbox" id="tgCoin" checked> <span data-i18n="tgCoin"></span></label>
-    <div style="margin-top:4px"><span class="legend"><i style="background:#e03131"></i><span data-i18n="legendOver"></span></span><span class="legend"><i style="background:var(--contact)"></i><span data-i18n="legendContact"></span></span></div>
   </aside>
 </div>
 
@@ -140,42 +272,54 @@
 window.P3D_I18N = {
   en: {
     pageTitle: "3D Model Viewer",
-    panelTitle: "Parts and display options (P key)", panelOpen: "☰ Parts & view", panelClose: "✕ Close",
+    panelTitle: "Parts and display options (P key)", panelOpen: "Parts & view", panelClose: "Close",
     gizmoTitle: "Click a direction to view from it",
-    hint: "Left drag: rotate · Wheel: zoom (toward cursor) · Right drag / Shift+drag: pan · Double-click: set rotation center",
-    parts: "Parts", showAll: "Show all", unchecked: "Unchecked parts:", ghost: "Transparent", hide: "Hidden",
-    display: "Display", tgLabels: "Part labels", tgDirs: "Directions (arrows and labels)",
-    tgOver: "Faces likely to need support (judged in print orientation)", tgContact: "Faces touching the bed",
-    tgCoin: "Size reference (Ø20 mm coin)", legendOver: "Needs support", legendContact: "Touches the bed",
+    hintTitle: "Mouse controls",
+    hint: [["Left drag", "rotate"], ["Wheel", "zoom toward the cursor"], ["Right drag or Shift+drag", "pan"],
+      ["Double-click", "rotate around that point"]],
+    tbSize: "Size (W × D × H)", tbParts: "Parts", tbBuilt: "Built",
+    nObjects: (n) => `in ${n} objects`,
+    modeGroup: "Orientation", viewGroup: "View from",
+    parts: "Parts", showAll: "Show all", unchecked: "Unchecked parts", ghost: "Transparent", hide: "Hidden",
+    display: "Display", tgLabels: "Part labels",
+    tgDirs: "Directions", tgDirsNote: "Arrows and labels",
+    tgOver: "Faces likely to need support", tgOverNote: "Judged in print orientation",
+    tgContact: "Faces touching the bed",
+    tgCoin: "Size reference", tgCoinNote: "Ø20 mm coin",
     modeDesign: "As used", modePrint: "Print orientation",
     views: ["Front", "Back", "Right", "Left", "Top", "Bottom", "Overview"],
     dirs: { up: "Up", down: "Down", front: "Front", back: "Back", right: "Right", left: "Left" },
     gizmo: { up: "U", down: "D", front: "F", back: "B", right: "R", left: "L" },
     coin: "Coin (Ø20 mm)",
-    size: (s) => `Size ${s.join(" × ")} mm (W × D × H)`, built: (t) => `Built ${t}`,
     nParts: (n) => `${n} ${n === 1 ? "part" : "parts"}`, only: "Only",
     onlyObj: "Show only this object", onlyPart: "Show only this part", toggleObj: "Expand / collapse",
-    bbox: (s) => `Size ${s.join("×")} mm`,
+    bbox: (s) => `Size ${s.join(" × ")} mm`,
     error: "Could not start the 3D view. Please open it in a recent version of Chrome, Edge, Safari or Firefox.",
   },
   ja: {
     pageTitle: "3Dモデル確認ビューア",
-    panelTitle: "パーツの表示・表示オプション（P キー）", panelOpen: "☰ パーツ・表示", panelClose: "✕ 閉じる",
+    panelTitle: "パーツの表示・表示オプション（P キー）", panelOpen: "パーツ・表示", panelClose: "閉じる",
     gizmoTitle: "クリックした方向から見る",
-    hint: "左ドラッグ：回転　ホイール：拡大縮小（カーソル位置へ）　右ドラッグ / Shift+ドラッグ：移動　ダブルクリック：その点を回転の中心に",
-    parts: "パーツ", showAll: "すべて表示", unchecked: "外したパーツ：", ghost: "半透明", hide: "非表示",
-    display: "表示", tgLabels: "部位ラベル", tgDirs: "方向（矢印とラベル）",
-    tgOver: "サポートが要りそうな面（印刷の向きで判定）", tgContact: "ベッドに接する面",
-    tgCoin: "大きさの目安（1円玉）", legendOver: "サポート要", legendContact: "ベッドに接する面",
+    hintTitle: "マウス操作",
+    hint: [["左ドラッグ", "回転"], ["ホイール", "カーソル位置へ拡大縮小"], ["右ドラッグ / Shift+ドラッグ", "移動"],
+      ["ダブルクリック", "その点を回転の中心に"]],
+    tbSize: "外形（幅×奥行×高さ）", tbParts: "パーツ", tbBuilt: "作成",
+    nObjects: (n) => `${n} オブジェクト`,
+    modeGroup: "向き", viewGroup: "視点",
+    parts: "パーツ", showAll: "すべて表示", unchecked: "外したパーツ", ghost: "半透明", hide: "非表示",
+    display: "表示", tgLabels: "部位ラベル",
+    tgDirs: "方向", tgDirsNote: "矢印とラベル",
+    tgOver: "サポートが要りそうな面", tgOverNote: "印刷の向きで判定",
+    tgContact: "ベッドに接する面",
+    tgCoin: "大きさの目安", tgCoinNote: "1円玉（直径20mm）",
     modeDesign: "使うときの向き", modePrint: "印刷の向き",
     views: ["前から", "後ろから", "右から", "左から", "上から", "下から", "全体"],
     dirs: { up: "上", down: "下", front: "前", back: "後", right: "右", left: "左" },
     gizmo: { up: "上", down: "下", front: "前", back: "後", right: "右", left: "左" },
     coin: "1円玉（直径20mm）",
-    size: (s) => `外形 ${s.join(" × ")} mm（幅×奥行×高さ）`, built: (t) => `作成 ${t}`,
     nParts: (n) => `${n} パーツ`, only: "のみ",
     onlyObj: "このオブジェクトだけ表示", onlyPart: "このパーツだけ表示", toggleObj: "開く／たたむ",
-    bbox: (s) => `外形 ${s.join("×")} mm`,
+    bbox: (s) => `外形 ${s.join(" × ")} mm`,
     error: "3D 表示を開始できませんでした。最新の Chrome / Edge / Safari / Firefox で開いてください。",
   },
 };
@@ -191,18 +335,20 @@ document.documentElement.lang = window.P3D_LANG;
 document.title = M.title ? `${M.title} – ${L.pageTitle}` : L.pageTitle;
 document.querySelectorAll("[data-i18n]").forEach((node) => { node.textContent = L[node.dataset.i18n]; });
 document.querySelectorAll("[data-i18n-title]").forEach((node) => { node.title = L[node.dataset.i18nTitle]; });
+document.querySelectorAll("[data-i18n-aria-label]").forEach((node) => { node.setAttribute("aria-label", L[node.dataset.i18nAriaLabel]); });
 THREE.Object3D.DEFAULT_UP.set(0, 0, 1);          // 3D printer convention: Z is up
 const $ = (id) => document.getElementById(id);
 const v3 = (a) => new THREE.Vector3(...a);
 const css = getComputedStyle(document.documentElement);
 const cssv = (k) => css.getPropertyValue(k).trim();
+// axis: the signed axis shown next to each direction label (front = -Y, right = +X, up = +Z)
 const DIRS = [
-  { key: "up",    v: [0, 0, 1],  color: cssv("--ax-z") },
-  { key: "down",  v: [0, 0, -1], color: cssv("--ax-z") },
-  { key: "front", v: [0, -1, 0], color: cssv("--ax-y") },
-  { key: "back",  v: [0, 1, 0],  color: cssv("--ax-y") },
-  { key: "right", v: [1, 0, 0],  color: cssv("--ax-x") },
-  { key: "left",  v: [-1, 0, 0], color: cssv("--ax-x") },
+  { key: "up",    v: [0, 0, 1],  axis: "+Z", color: cssv("--ax-z") },
+  { key: "down",  v: [0, 0, -1], axis: "\u2212Z", color: cssv("--ax-z") },
+  { key: "front", v: [0, -1, 0], axis: "\u2212Y", color: cssv("--ax-y") },
+  { key: "back",  v: [0, 1, 0],  axis: "+Y", color: cssv("--ax-y") },
+  { key: "right", v: [1, 0, 0],  axis: "+X", color: cssv("--ax-x") },
+  { key: "left",  v: [-1, 0, 0], axis: "\u2212X", color: cssv("--ax-x") },
 ];
 const pid = (i) => `P${i + 1}`;
 const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
@@ -299,7 +445,7 @@ M.parts.forEach((p, i) => {
 
 // Faces needing support and faces touching the bed (computed in Python on the fused shape, excluding faces
 // supported by the part below). Always judged in print orientation; in the as-used view the same faces are shown in place.
-const overMat = new THREE.MeshBasicMaterial({ color: 0xe03131, side: THREE.DoubleSide,
+const overMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(cssv("--support")), side: THREE.DoubleSide,
   polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
 const contactMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(cssv("--contact")), side: THREE.DoubleSide,
   polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
@@ -326,7 +472,7 @@ const R = Math.max(dSize.x, dSize.y, dSize.z, 10);
 const dotMesh = (radius, color) => new THREE.Mesh(new THREE.SphereGeometry(radius), new THREE.MeshBasicMaterial({ color }));
 const labelObjs = M.parts.map((p, i) => {
   const div = el("div", { className: "lbl", innerHTML: `<small>${pid(i)}</small>${esc(p.label)}` });
-  div.style.borderColor = p.color;
+  div.style.borderLeftColor = p.color;
   div.addEventListener("mouseenter", (e) => { setHover([i]); showTip(e, i); });
   div.addEventListener("mouseleave", () => { setHover(null); hideTip(); });
   const obj = new CSS2DObject(div);
@@ -363,20 +509,24 @@ function buildBed(mode, box) {
     [w, d] = M.printer.build_volume_mm; cx = 0; cy = 0;
     const h = M.printer.build_volume_mm[2];
     const vol = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(w, d, h)),
-      new THREE.LineDashedMaterial({ color: 0x8a94a8, dashSize: 4, gapSize: 3 }));
+      new THREE.LineDashedMaterial({ color: new THREE.Color(cssv("--volume")), dashSize: 4, gapSize: 3 }));
     vol.position.set(0, 0, h / 2); vol.computeLineDistances(); bed.add(vol);
   } else {
     w = d = Math.ceil((Math.max(s.x, s.y) * 1.8 + 30) / 10) * 10;
   }
-  const plate = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshBasicMaterial({ color: 0x8a94a8,
-    transparent: true, opacity: .16, side: THREE.DoubleSide, depthWrite: false }));
+  const plate = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshBasicMaterial({ color: new THREE.Color(cssv("--bed")),
+    transparent: true, opacity: .55, side: THREE.DoubleSide, depthWrite: false }));
   plate.position.set(cx, cy, -0.05);
-  const n = Math.max(w, d);
-  const grid = new THREE.GridHelper(n, Math.round(n / 10), 0x8a94a8, 0xb8c0cf);
-  grid.rotation.x = Math.PI / 2; grid.position.set(cx, cy, 0);
-  grid.material.transparent = true; grid.material.opacity = .45;
-  bed.add(plate, grid);
+  bed.add(plate, bedGrid(w, d, cx, cy, 10, cssv("--grid-minor"), .6), bedGrid(w, d, cx, cy, 50, cssv("--grid-major"), .7));
   coin.position.set(Math.max(box.min.x - 18, cx - w / 2 + 12), Math.max(box.min.y - 18, cy - d / 2 + 12), 0);
+}
+// Grid lines every `step` mm across the bed, counted from the bed center (10 mm minor, 50 mm major)
+function bedGrid(w, d, cx, cy, step, color, opacity) {
+  const pts = [];
+  for (let x = 0; x <= w / 2 + 1e-6; x += step) for (const s of x ? [-1, 1] : [1]) pts.push(cx + s * x, cy - d / 2, 0, cx + s * x, cy + d / 2, 0);
+  for (let y = 0; y <= d / 2 + 1e-6; y += step) for (const s of y ? [-1, 1] : [1]) pts.push(cx - w / 2, cy + s * y, 0, cx + w / 2, cy + s * y, 0);
+  const g = new THREE.BufferGeometry(); g.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3));
+  return new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: new THREE.Color(color), transparent: true, opacity, depthWrite: false }));
 }
 function buildDirs(box) {
   dirGroup.clear(); dirLabels.length = 0;
@@ -390,7 +540,7 @@ function buildDirs(box) {
       : new THREE.Vector3(c.x, c.y, 0.2).add(v.clone().multiplyScalar(reach));
     const len = d.key === "up" ? s.z * 0.9 + 10 : R * 0.3;
     dirGroup.add(new THREE.ArrowHelper(v, origin, len, new THREE.Color(d.color), len * 0.22, len * 0.12));
-    const div = el("div", { className: "dir", textContent: L.dirs[d.key] });
+    const div = el("div", { className: "dir", innerHTML: `${esc(L.dirs[d.key])}<small>${d.axis}</small>` });
     div.style.background = d.color;
     const lab = new CSS2DObject(div);
     lab.position.copy(origin.clone().add(v.clone().multiplyScalar(len * 1.18)));
@@ -480,10 +630,16 @@ function textSprite(t, color, hollow) {
 const VIEWS = [[0, -1, 0], [0, 1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0.9, -1.3, 0.9]]
   .map((v, i) => [L.views[i], v]);
 const tb = $("toolbar");
-const chip = (name, onclick) => tb.appendChild(el("button", { className: "chip", textContent: name, onclick }));
-for (const [name, m] of [[L.modeDesign, "design"], [L.modePrint, "print"]]) chip(name, () => setMode(m)).dataset.mode = m;
-tb.appendChild(el("span", { className: "sep" }));
-for (const [name, v] of VIEWS) chip(name, () => viewFrom(v));
+// Two button groups: the orientation (a state, shown pressed) and the view presets (one-shot camera moves)
+function btnGroup(label) {
+  const g = tb.appendChild(el("div", { className: "bar" }));
+  g.setAttribute("role", "group"); g.setAttribute("aria-label", label);
+  return g;
+}
+const modeBar = btnGroup(L.modeGroup), viewBar = btnGroup(L.viewGroup);
+for (const [name, m] of [[L.modeDesign, "design"], [L.modePrint, "print"]])
+  modeBar.appendChild(el("button", { textContent: name, onclick: () => setMode(m) })).dataset.mode = m;
+for (const [name, v] of VIEWS) viewBar.appendChild(el("button", { textContent: name, onclick: () => viewFrom(v) }));
 // Frame the visible (checked) parts. If none are checked, frame everything
 function visibleBox() {
   const box = new THREE.Box3();
@@ -506,7 +662,8 @@ const app = $("app"), panelBtn = $("panelBtn");
 function togglePanel(open = !app.classList.contains("open")) {
   app.classList.toggle("open", open);
   panelBtn.setAttribute("aria-expanded", String(open));
-  panelBtn.textContent = open ? L.panelClose : L.panelOpen;
+  $("panelBtnText").textContent = open ? L.panelClose : L.panelOpen;
+  if (open) $("hint").classList.add("folded");     // the panel is open: the user has found their way around
 }
 panelBtn.onclick = () => togglePanel();
 togglePanel(false);
@@ -515,8 +672,13 @@ window.addEventListener("keydown", (e) => {
   if (e.key === "p" || e.key === "P") togglePanel();
 });
 
+// ---------------------------------------------------------------- title block and mouse hint
 $("title").textContent = M.title;
-$("subtitle").innerHTML = esc(L.size(M.size_mm)) + (M.built_at ? `<br>${esc(L.built(M.built_at))}` : "");
+$("tbSize").textContent = `${M.size_mm.join(" × ")} mm`;
+if (M.built_at) $("tbBuilt").textContent = M.built_at; else $("tbBuiltCell").remove();
+$("hintList").innerHTML = L.hint.map(([k, v]) => `<li><b>${esc(k)}</b>${esc(v)}</li>`).join("");
+// Fold the hint into its "?" button after the first drag in the 3D view (or when the panel opens)
+renderer.domElement.addEventListener("pointerdown", () => $("hint").classList.add("folded"), { once: true });
 
 // ---------------------------------------------------------------- part visibility (nested checkboxes: object > part)
 const shown = M.parts.map(() => true);
@@ -533,12 +695,15 @@ for (const o of objects) {
   let kids = wrap;
   if (nested) {
     const r = el("div", { className: "row head" });
-    r.innerHTML = `<button class="caret" title="${esc(L.toggleObj)}">▼</button><input type="checkbox" checked>`
+    r.innerHTML = `<button class="caret" title="${esc(L.toggleObj)}" aria-label="${esc(L.toggleObj)}">`
+      + `<svg viewBox="0 0 10 10" aria-hidden="true"><path d="M1 3l4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button>`
+      + `<input type="checkbox" checked>`
       + `<span class="name">${esc(o.label)} <span class="cnt">${esc(L.nParts(idx.length))}</span></span>`
       + `<button class="mini only" title="${esc(L.onlyObj)}">${esc(L.only)}</button>`;
     const cb = r.querySelector("input");
     cb.onchange = () => { idx.forEach((i) => { shown[i] = cb.checked; }); applyVisibility(); };
     r.querySelector(".caret").onclick = () => wrap.classList.toggle("closed");
+    cb.setAttribute("aria-label", o.label);
     r.querySelector(".name").onclick = () => wrap.classList.toggle("closed");
     r.querySelector(".only").onclick = () => showOnly(idx);
     r.onmouseenter = () => setHover(idx); r.onmouseleave = () => setHover(null);
@@ -555,6 +720,7 @@ for (const o of objects) {
       + `<button class="mini only" title="${esc(L.onlyPart)}">${esc(L.only)}</button>`;
     r.title = p.description || "";
     const cb = r.querySelector("input");
+    cb.setAttribute("aria-label", `${pid(i)} ${p.label}`);
     cb.onchange = () => { shown[i] = cb.checked; applyVisibility(); };
     r.querySelector(".name").onclick = () => { shown[i] = !shown[i]; applyVisibility(); };
     r.querySelector(".only").onclick = () => showOnly([i]);
@@ -563,6 +729,10 @@ for (const o of objects) {
     partRows[i] = { r, cb };
   }
   $("tree").appendChild(wrap);
+}
+{
+  const nObj = objects.filter((o) => M.parts.some((p) => p.group === o.id)).length;
+  $("tbParts").innerHTML = `${M.parts.length}` + (nested ? ` <small>${esc(L.nObjects(nObj))}</small>` : "");
 }
 $("showAll").onclick = () => { shown.fill(true); applyVisibility(); };
 document.querySelectorAll("[data-ghost]").forEach((b) => b.onclick = () => { ghostMode = b.dataset.ghost; applyVisibility(); });
@@ -614,12 +784,12 @@ const objLabel = Object.fromEntries(objects.map((o) => [o.id, o.label]));
 const tip = $("tip");
 function showTip(e, i) {
   const p = M.parts[i];
-  tip.innerHTML = `<b>${pid(i)} ${esc(p.label)}</b>` + (nested ? ` <span class="sub">${esc(objLabel[p.group] ?? p.group)}</span>` : "")
-    + (p.description ? `<br>${esc(p.description)}` : "")
-    + (fmtDims(p.key_dims) ? `<br><span class="sub">${esc(fmtDims(p.key_dims))}</span>` : "")
-    + `<br><span class="sub">${esc(L.bbox(p.size_mm))}</span>`;
+  tip.innerHTML = `<div class="t"><i style="background:${esc(p.color)}"></i><small>${pid(i)}</small>${esc(p.label)}</div>`
+    + (nested ? `<div class="m">${esc(objLabel[p.group] ?? p.group)}</div>` : "")
+    + (p.description ? `<p>${esc(p.description)}</p>` : "")
+    + `<div class="m">${esc([fmtDims(p.key_dims), L.bbox(p.size_mm)].filter(Boolean).join(" / "))}</div>`;
   const r = host.getBoundingClientRect();
-  tip.style.left = `${Math.min(e.clientX - r.left + 14, r.width - 270)}px`; tip.style.top = `${e.clientY - r.top + 14}px`;
+  tip.style.left = `${Math.min(e.clientX - r.left + 14, r.width - 290)}px`; tip.style.top = `${e.clientY - r.top + 14}px`;
   tip.style.display = "block";
 }
 function hideTip() { tip.style.display = "none"; }
