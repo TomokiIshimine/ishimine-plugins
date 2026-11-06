@@ -22,7 +22,8 @@ import sys
 from pathlib import Path
 
 import numpy as np
-import trimesh
+
+from .files import ANALYSIS_JSON, VIEWER_HTML, load_dir, read_json
 
 VIEWER_DIR = Path(__file__).resolve().parent.parent / "viewer"
 TEMPLATE = VIEWER_DIR / "viewer_template.html"
@@ -59,62 +60,70 @@ def resolve_lang(pj: dict, lang: str | None = None) -> str:
     return detect_lang(pj)
 
 
-def build_viewer(d: str | Path, lang: str | None = None) -> Path:
-    d = Path(d)
-    pj = json.loads((d / "parts.json").read_text(encoding="utf-8"))
-    analysis = json.loads((d / "analysis.json").read_text(encoding="utf-8"))
-    parts = []
-    for p in pj["parts"]:
-        m = trimesh.load_mesh(d / "out" / "parts" / f"{p['id']}.stl", process=True)
-        parts.append({
-            "id": p["id"], "label": p["label"], "description": p.get("description", ""),
-            "color": p["color"], "anchor": p["anchor"], "key_dims": p.get("key_dims", {}),
-            "requirements": p.get("requirements", []), "group": p.get("print_group", "main"),
-            "size_mm": p["bbox_mm"]["size"],
-            "positions": np.round(m.vertices, 3).ravel().tolist(),
-            "indices": m.faces.ravel().astype(int).tolist(),
-        })
+def _part_data(p: dict, mesh) -> dict:
+    return {
+        "id": p["id"], "label": p["label"], "description": p.get("description", ""),
+        "color": p["color"], "anchor": p["anchor"], "key_dims": p.get("key_dims", {}),
+        "requirements": p.get("requirements", []), "group": p.get("print_group", "main"),
+        "size_mm": p["bbox_mm"]["size"],
+        "positions": np.round(mesh.vertices, 3).ravel().tolist(),
+        "indices": mesh.faces.ravel().astype(int).tolist(),
+    }
+
+
+def viewer_data(pj: dict, analysis: dict, meshes: dict, lang: str | None = None) -> dict:
+    """Everything the viewer template needs (window.MODEL)."""
+    from .analyze import group_overlays
+    pr = analysis["printer"]
     groups = {g: {"matrix": v["matrix"], "rotation_deg": v["rotation_deg"], "bed_face": v.get("bed_face", "")}
               for g, v in pj["print_orientation"]["groups"].items()}
-
     labels = pj.get("objects", {})
-    objects = [{"id": g, "label": labels.get(g, g)} for g in groups]
-
-    from .analyze import group_overlays, load_dir
-    _, pmeshes = load_dir(d)
-    overlays = group_overlays(pj, pmeshes, float(analysis["printer"]["overhang_limit_deg"]))
-    pr = analysis["printer"]
-    data = {
+    return {
         "model": pj["model"], "title": pj["title"], "units": "mm", "lang": resolve_lang(pj, lang),
         "axes": {"up": "+Z", "front": "-Y", "right": "+X"},
         "size_mm": analysis["summary"]["size_mm"],
         "built_at": dt.datetime.now().strftime("%Y-%m-%d %H:%M"),
         "printer": {"name": pr["name"], "build_volume_mm": pr["build_volume_mm"], "nozzle_mm": pr["nozzle_mm"],
                     "overhang_limit_deg": pr["overhang_limit_deg"]},
-        "parts": parts, "objects": objects, "overlays": overlays, "features": pj.get("features", []),
+        "parts": [_part_data(p, meshes[p["id"]]) for p in pj["parts"]],
+        "objects": [{"id": g, "label": labels.get(g, g)} for g in groups],
+        "overlays": group_overlays(pj, meshes, float(pr["overhang_limit_deg"])),
+        "features": pj.get("features", []),
         "groups": groups,
     }
 
+
+def render_html(data: dict) -> str:
     html = TEMPLATE.read_text(encoding="utf-8")
     assert DATA_PH in html and MAP_PH in html, "Insertion points not found in viewer_template.html"
     payload = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
-    html = html.replace(MAP_PH, three_bundle()).replace(DATA_PH, payload)
-    out = d / "viewer.html"
-    out.write_text(html, encoding="utf-8")
+    return html.replace(MAP_PH, three_bundle()).replace(DATA_PH, payload)
+
+
+def build_viewer(d: str | Path, lang: str | None = None) -> Path:
+    d = Path(d)
+    pj, meshes = load_dir(d)
+    analysis = read_json(d / ANALYSIS_JSON)
+    out = d / VIEWER_HTML
+    out.write_text(render_html(viewer_data(pj, analysis, meshes, lang)), encoding="utf-8")
     return out
 
 
-if __name__ == "__main__":
-    args = sys.argv[1:]
+def main(args):
     lang = None
     if "--lang" in args:
         i = args.index("--lang")
         if i + 1 >= len(args):
             print(__doc__)
-            sys.exit(2)
+            return 2
         lang = args[i + 1]
         del args[i:i + 2]
     if not args:
         print(__doc__)
-        sys.exit(2)
+        return 2
     print(build_viewer(args[0], lang=lang))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

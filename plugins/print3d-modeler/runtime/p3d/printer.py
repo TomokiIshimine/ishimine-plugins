@@ -15,6 +15,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from .files import read_json
+
 DEFAULT = {
     "name": "Generic FDM (default)",
     "build_volume_mm": [220, 220, 250],
@@ -47,9 +49,7 @@ PRESETS = {
 
 
 def _read(path: Path) -> dict | None:
-    if path.is_file():
-        return json.loads(path.read_text(encoding="utf-8"))
-    return None
+    return read_json(path) if path.is_file() else None
 
 
 def resolve(cfg: dict | None) -> dict:
@@ -78,10 +78,15 @@ def load_printer(model_dir: str | Path) -> dict:
     return resolve(None)
 
 
-if __name__ == "__main__":
-    import sys
-    if len(sys.argv) > 1 and sys.argv[1] == "--presets":
+def main(argv):
+    if argv and argv[0] == "--presets":
         for k, v in PRESETS.items():
             print(f"{k:22s} {v['name']:28s} {' × '.join(map(str, v['build_volume_mm']))} mm")
     else:
-        print(json.dumps(load_printer(sys.argv[1] if len(sys.argv) > 1 else "."), ensure_ascii=False, indent=2))
+        print(json.dumps(load_printer(argv[0] if argv else "."), ensure_ascii=False, indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    import sys
+    sys.exit(main(sys.argv[1:]))

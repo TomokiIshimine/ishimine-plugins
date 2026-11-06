@@ -15,28 +15,45 @@ from pathlib import Path
 
 import trimesh
 
+from .files import ANALYSIS_JSON, PARTS_JSON, load_mesh, print_stl, read_json
 from .printer import load_printer
 
-DENSITY = {"PLA": 1.24, "PETG": 1.27, "ABS": 1.04, "ASA": 1.07, "TPU": 1.21}
+DENSITY = {"PLA": 1.24, "PETG": 1.27, "ABS": 1.04, "ASA": 1.07, "TPU": 1.21}   # g/cm³
+WEIGHT_NOTE = ("solid_weight_g is the upper bound at 100% infill. Actual weight drops a lot with infill "
+               "(roughly 30-50% of it at 15-20% infill)")
+
+
+def _analysis_summary(d: Path) -> dict:
+    """What the print notes need from analysis.json (empty if it has not been written)."""
+    ap = d / ANALYSIS_JSON
+    if not ap.is_file():
+        return {}
+    from .analyze import BLOCKING
+    a = read_json(ap)
+    return {"warnings": [f["issue"] for f in a["findings"] if f["severity"] == "warning"],
+            "unresolved": [f["issue"] for f in a["findings"] if f["severity"] in BLOCKING],
+            "overhang_area_mm2": {g["group"]: g["overhang_area_mm2"] for g in a["groups"]},
+            "bridges": {g["group"]: g["bridges"] for g in a["groups"]}}
 
 
 def export_dir(d: str | Path) -> dict:
     d = Path(d)
-    pj = json.loads((d / "parts.json").read_text(encoding="utf-8"))
+    pj = read_json(d / PARTS_JSON)
     printer = load_printer(d)
     fin = d / "out" / "final"
     fin.mkdir(parents=True, exist_ok=True)
     for old in fin.glob("*"):
         old.unlink()
-    scene = trimesh.Scene()
-    info = []
+    groups = pj["print_orientation"]["groups"]
     labels = {p["id"]: p["label"] for p in pj["parts"]}
     dens = DENSITY.get(str(printer.get("material", "PLA")).upper(), 1.24)
-    for g, gi in pj["print_orientation"]["groups"].items():
-        m = trimesh.load_mesh(d / "out" / "print" / f"{g}.stl", process=True)
+    scene = trimesh.Scene()
+    info = []
+    for g, gi in groups.items():
+        m = load_mesh(print_stl(d, g))
         stl = fin / f"{pj['model']}_{g}.stl"
         m.export(stl)
-        name = g if len(pj["print_orientation"]["groups"]) > 1 else pj["model"]
+        name = g if len(groups) > 1 else pj["model"]
         scene.add_geometry(m, node_name=name, geom_name=name)
         vol = float(m.volume) if m.is_watertight else None
         info.append({
@@ -48,26 +65,22 @@ def export_dir(d: str | Path) -> dict:
         })
     tmf = fin / f"{pj['model']}.3mf"
     scene.export(tmf)
-    an = {}
-    ap = d / "analysis.json"
-    if ap.is_file():
-        a = json.loads(ap.read_text(encoding="utf-8"))
-        an = {"warnings": [f["issue"] for f in a["findings"] if f["severity"] == "warning"],
-              "unresolved": [f["issue"] for f in a["findings"] if f["severity"] in ("critical", "major")],
-              "overhang_area_mm2": {g["group"]: g["overhang_area_mm2"] for g in a["groups"]},
-              "bridges": {g["group"]: g["bridges"] for g in a["groups"]}}
     return {
         "model": pj["model"], "title": pj["title"], "files": {"3mf": str(tmf.relative_to(d)),
                                                               "stl": [i["stl"] for i in info]},
         "printer": {k: printer[k] for k in ("name", "build_volume_mm", "nozzle_mm", "layer_height_mm", "material")},
-        "groups": info, "analysis": an, "print_note": pj.get("print_note", ""),
-        "note": "solid_weight_g is the upper bound at 100% infill. Actual weight drops a lot with infill "
-                "(roughly 30-50% of it at 15-20% infill)",
+        "groups": info, "analysis": _analysis_summary(d), "print_note": pj.get("print_note", ""),
+        "note": WEIGHT_NOTE,
     }
 
 
-if __name__ == "__main__":
-    if len(sys.argv) < 2:
+def main(argv):
+    if not argv:
         print(__doc__)
-        sys.exit(2)
-    print(json.dumps(export_dir(sys.argv[1]), ensure_ascii=False, indent=2))
+        return 2
+    print(json.dumps(export_dir(argv[0]), ensure_ascii=False, indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

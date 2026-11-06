@@ -1,4 +1,4 @@
-"""Shared helpers: shape conversion, rotation, direction labels."""
+"""Shared helpers: shape conversion, boolean operations, rotation, direction labels."""
 from __future__ import annotations
 
 import math
@@ -35,17 +35,21 @@ def direction_label(vec) -> str:
     return f"{DIRECTION_LABELS[k]} ({k})"
 
 
+# --------------------------------------------------------------------- shape conversion
+def is_build123d(obj) -> bool:
+    return type(obj).__module__.startswith("build123d")
+
+
 def to_trimesh(obj) -> trimesh.Trimesh:
     """Convert a build123d shape, manifold3d.Manifold or trimesh.Trimesh to a mesh."""
     if isinstance(obj, trimesh.Trimesh):
         return obj.copy()
-    mod = type(obj).__module__
-    if mod.startswith("manifold3d"):
+    if type(obj).__module__.startswith("manifold3d"):
         mesh = obj.to_mesh()
         verts = np.asarray(mesh.vert_properties)[:, :3]
         faces = np.asarray(mesh.tri_verts)
         return trimesh.Trimesh(vertices=verts, faces=faces, process=True)
-    if mod.startswith("build123d") or hasattr(obj, "wrapped"):
+    if is_build123d(obj) or hasattr(obj, "wrapped"):
         from build123d import export_stl  # lazy import (not needed when only manifold is used)
         with tempfile.TemporaryDirectory() as td:
             p = Path(td) / "s.stl"
@@ -66,10 +70,7 @@ def to_manifold(mesh: trimesh.Trimesh):
     return m
 
 
-def manifold_to_trimesh(m) -> trimesh.Trimesh:
-    return to_trimesh(m)
-
-
+# --------------------------------------------------------------------- boolean operations
 def boolean(meshes: list[trimesh.Trimesh], op: str = "union") -> trimesh.Trimesh | None:
     """Boolean operation with manifold3d. Returns None on failure."""
     import manifold3d as mf
@@ -77,7 +78,23 @@ def boolean(meshes: list[trimesh.Trimesh], op: str = "union") -> trimesh.Trimesh
     if any(x is None for x in ms):
         return None
     opmap = {"union": mf.OpType.Add, "difference": mf.OpType.Subtract, "intersection": mf.OpType.Intersect}
-    return manifold_to_trimesh(mf.Manifold.batch_boolean(ms, opmap[op]))
+    return to_trimesh(mf.Manifold.batch_boolean(ms, opmap[op]))
+
+
+def fuse(meshes: list[trimesh.Trimesh]) -> trimesh.Trimesh:
+    """Union of the meshes as a new mesh. Falls back to plain concatenation if the union fails."""
+    if len(meshes) == 1:
+        return meshes[0].copy()
+    r = boolean(meshes, "union")
+    return r if r is not None else trimesh.util.concatenate(meshes)
+
+
+# --------------------------------------------------------------------- transforms
+def transformed(mesh: trimesh.Trimesh, matrix) -> trimesh.Trimesh:
+    """Copy of the mesh with a 4x4 matrix applied."""
+    out = mesh.copy()
+    out.apply_transform(matrix)
+    return out
 
 
 def rotation_matrix(rotation_deg) -> np.ndarray:
@@ -91,17 +108,14 @@ def rotation_matrix(rotation_deg) -> np.ndarray:
 def place_on_bed(mesh: trimesh.Trimesh, rotation_deg, x_offset: float = 0.0) -> tuple[trimesh.Trimesh, np.ndarray]:
     """Rotate, then put the bottom at Z=0 and the XY center at (x_offset, 0). Also returns the matrix."""
     R = rotation_matrix(rotation_deg)
-    tmp = mesh.copy()
-    tmp.apply_transform(R)
-    lo, hi = tmp.bounds
+    lo, hi = transformed(mesh, R).bounds
     T = np.eye(4)
     T[:3, 3] = [x_offset - (lo[0] + hi[0]) / 2, -(lo[1] + hi[1]) / 2, -lo[2]]
     M = T @ R
-    out = mesh.copy()
-    out.apply_transform(M)
-    return out, M
+    return transformed(mesh, M), M
 
 
+# --------------------------------------------------------------------- JSON
 def round_list(a, nd=2):
     return [round(float(v), nd) for v in np.asarray(a).ravel()]
 

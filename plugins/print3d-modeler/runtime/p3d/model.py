@@ -1,7 +1,6 @@
 """Model with named parts (LabeledModel). Used from model.py; writes every output file."""
 from __future__ import annotations
 
-import json
 import re
 import shutil
 from dataclasses import dataclass, field
@@ -10,7 +9,8 @@ from pathlib import Path
 import numpy as np
 import trimesh
 
-from .meshutil import boolean, place_on_bed, round_list, to_trimesh
+from .files import PARTS_JSON, part_stl, print_stl, write_json
+from .meshutil import boolean, fuse, is_build123d, place_on_bed, round_list, to_trimesh
 
 # No blues, so parts never get confused with the bed-contact highlight (blue)
 PALETTE = ["#F28E2B", "#59A14F", "#B07AA1", "#E15759", "#76B7B2",
@@ -45,6 +45,13 @@ class Feature:
 class Cut:
     shape: object
     parts: list | None   # None = every part
+
+    def applies_to(self, part_id: str) -> bool:
+        return self.parts is None or part_id in self.parts
+
+
+def _hex_rgb(color: str) -> list[int]:
+    return [int(color[i:i + 2], 16) for i in (1, 3, 5)]
 
 
 class LabeledModel:
@@ -109,18 +116,18 @@ class LabeledModel:
         self.object_labels[group] = label
         return self
 
-    # ------------------------------------------------------------------ build
+    # ------------------------------------------------------------------ geometry
     def _part_meshes(self) -> dict[str, trimesh.Trimesh]:
-        cut_meshes = [(to_trimesh(c.shape), c.parts) for c in self.cuts]
+        """Mesh of every part with its cuts applied (design pose)."""
+        cut_meshes = [(to_trimesh(c.shape), c) for c in self.cuts]
         out = {}
         for p in self.parts:
             m = to_trimesh(p.shape)
-            cuts = [cm for cm, targets in cut_meshes if targets is None or p.id in targets]
+            cuts = [cm for cm, c in cut_meshes if c.applies_to(p.id)]
             if cuts:
-                r = boolean([m, *cuts], "difference")
-                if r is None:
+                m = boolean([m, *cuts], "difference")
+                if m is None:
                     raise RuntimeError(f"Cutting part {p.id} failed (the shape may not be closed)")
-                m = r
             out[p.id] = m
         return out
 
@@ -138,18 +145,18 @@ class LabeledModel:
         tc = mesh.triangles_center
         return tc[np.argmin(np.linalg.norm(tc - c, axis=1))].tolist()
 
-    def _export_step(self, path: Path):
+    # ------------------------------------------------------------------ outputs
+    def _export_step(self, path: Path) -> bool:
+        """STEP for CAD editing. Only possible when every part and cut is a build123d shape."""
         try:
             from build123d import Compound, export_step
-            if not all(type(p.shape).__module__.startswith("build123d") for p in self.parts):
-                return False
-            if not all(type(c.shape).__module__.startswith("build123d") for c in self.cuts):
+            if not all(is_build123d(s) for s in [*(p.shape for p in self.parts), *(c.shape for c in self.cuts)]):
                 return False
             shapes = []
             for p in self.parts:
                 s = p.shape
                 for c in self.cuts:
-                    if c.parts is None or p.id in c.parts:
+                    if c.applies_to(p.id):
                         s = s - c.shape
                 s.label = p.id
                 shapes.append(s)
@@ -157,6 +164,72 @@ class LabeledModel:
             return True
         except Exception:
             return False
+
+    def _write_design_outputs(self, d: Path, meshes: dict) -> bool:
+        """out/parts/<id>.stl, out/model.glb, out/model.stl and out/model.step. Returns whether STEP was written."""
+        out = d / "out"
+        scene = trimesh.Scene()
+        scene.metadata = {"up_axis": "Z", "units": "mm", "front_axis": "-Y", "model": self.name,
+                          "title": self.title}
+        for p in self.parts:
+            m = meshes[p.id]
+            m.export(part_stl(d, p.id))
+            vm = m.copy()
+            vm.visual.face_colors = [*_hex_rgb(p.color), 255]
+            vm.metadata = {"label": p.label, "part_id": p.id}
+            scene.add_geometry(vm, node_name=p.id, geom_name=p.id)
+        scene.export(out / "model.glb")
+        trimesh.util.concatenate(list(meshes.values())).export(out / "model.stl")
+        return self._export_step(out / "model.step")
+
+    def _write_print_outputs(self, d: Path, meshes: dict, groups: dict[str, list[Part]]) -> dict:
+        """out/print/<group>.stl: each group fused, rotated and laid out side by side along X. Returns the group info."""
+        placed = {}
+        for g, plist in groups.items():
+            fused = fuse([meshes[p.id] for p in plist])
+            cfg = self.group_orientation.get(g, self.print_orientation)
+            pm, _ = place_on_bed(fused, cfg["rotation_deg"])
+            placed[g] = (fused, cfg, float(pm.extents[0]))
+        total = sum(w for _, _, w in placed.values()) + LAYOUT_GAP_MM * (len(placed) - 1)
+        x = -total / 2
+        info = {}
+        for g, (fused, cfg, width) in placed.items():
+            pm, M = place_on_bed(fused, cfg["rotation_deg"], x_offset=x + width / 2)
+            x += width + LAYOUT_GAP_MM
+            pm.export(print_stl(d, g))
+            info[g] = {"rotation_deg": cfg["rotation_deg"], "bed_face": cfg.get("bed_face", ""),
+                       "matrix": [round_list(r, 6) for r in M], "parts": [p.id for p in groups[g]],
+                       "size_mm": round_list(pm.extents, 2)}
+        return info
+
+    def _parts_json(self, meshes: dict, groups: dict, group_info: dict, step_ok: bool) -> dict:
+        parts = []
+        for p in self.parts:
+            m = meshes[p.id]
+            lo, hi = m.bounds
+            parts.append({
+                "id": p.id, "label": p.label, "description": p.description, "color": p.color,
+                "anchor": round_list(p.anchor if p.anchor is not None else self._auto_anchor(m), 2),
+                "key_dims": p.key_dims, "requirements": p.requirements, "print_group": p.print_group,
+                "bbox_mm": {"min": round_list(lo), "max": round_list(hi), "size": round_list(hi - lo)},
+                "volume_mm3": round(float(m.volume), 1),
+                "watertight": bool(m.is_watertight),
+            })
+        return {
+            "model": self.name,
+            "title": self.title,
+            "lang": self.lang,
+            "units": "mm",
+            "up_axis": "+Z",
+            "front_axis": "-Y",
+            "right_axis": "+X",
+            "print_orientation": {**self.print_orientation, "groups": group_info},
+            "objects": {g: self.object_labels.get(g, g) for g in groups},
+            "print_note": self.print_note,
+            "parts": parts,
+            "features": [f.__dict__ for f in self.features],
+            "files": {"glb": "out/model.glb", "step": "out/model.step" if step_ok else None},
+        }
 
     def build(self, where: str | Path) -> dict:
         """Write every output file. where is the path of model.py (__file__) or an output folder.
@@ -180,93 +253,29 @@ class LabeledModel:
         for sub in ("parts", "print"):
             if (out / sub).exists():
                 shutil.rmtree(out / sub)
-        (out / "parts").mkdir(parents=True, exist_ok=True)
-        (out / "print").mkdir(parents=True, exist_ok=True)
+            (out / sub).mkdir(parents=True, exist_ok=True)
 
         meshes = self._part_meshes()
-
-        # ---- design-pose outputs
-        scene = trimesh.Scene()
-        scene.metadata = {"up_axis": "Z", "units": "mm", "front_axis": "-Y", "model": self.name,
-                          "title": self.title}
-        for p in self.parts:
-            m = meshes[p.id]
-            m.export(out / "parts" / f"{p.id}.stl")
-            vm = m.copy()
-            rgb = [int(p.color[i:i + 2], 16) for i in (1, 3, 5)]
-            vm.visual.face_colors = [*rgb, 255]
-            vm.metadata = {"label": p.label, "part_id": p.id}
-            scene.add_geometry(vm, node_name=p.id, geom_name=p.id)
-        scene.export(out / "model.glb")
-        trimesh.util.concatenate(list(meshes.values())).export(out / "model.stl")
-        step_ok = self._export_step(out / "model.step")
-
-        # ---- print pose (fuse per group -> rotate -> lay out on the bed)
+        step_ok = self._write_design_outputs(d, meshes)
         groups = self._groups()
-        placed, widths = {}, {}
-        for g, plist in groups.items():
-            gm = [meshes[p.id] for p in plist]
-            fused = boolean(gm, "union") if len(gm) > 1 else gm[0]
-            if fused is None:
-                fused = trimesh.util.concatenate(gm)
-            cfg = self.group_orientation.get(g, self.print_orientation)
-            pm, M = place_on_bed(fused, cfg["rotation_deg"])
-            placed[g] = (fused, cfg)
-            widths[g] = float(pm.extents[0])
-        total = sum(widths.values()) + LAYOUT_GAP_MM * (len(widths) - 1)
-        x = -total / 2
-        group_info = {}
-        for g, (fused, cfg) in placed.items():
-            pm, M = place_on_bed(fused, cfg["rotation_deg"], x_offset=x + widths[g] / 2)
-            x += widths[g] + LAYOUT_GAP_MM
-            pm.export(out / "print" / f"{g}.stl")
-            group_info[g] = {"rotation_deg": cfg["rotation_deg"], "bed_face": cfg.get("bed_face", ""),
-                             "matrix": [round_list(r, 6) for r in M], "parts": [p.id for p in groups[g]],
-                             "size_mm": round_list(pm.extents, 2)}
+        group_info = self._write_print_outputs(d, meshes, groups)
 
-        # ---- parts.json (the previous version is kept as out/parts.prev.json to detect unintended changes)
-        if (d / "parts.json").exists():
-            shutil.copy2(d / "parts.json", out / "parts.prev.json")
-        parts_json = {
-            "model": self.name,
-            "title": self.title,
-            "lang": self.lang,
-            "units": "mm",
-            "up_axis": "+Z",
-            "front_axis": "-Y",
-            "right_axis": "+X",
-            "print_orientation": {**self.print_orientation, "groups": group_info},
-            "objects": {g: self.object_labels.get(g, g) for g in groups},
-            "print_note": self.print_note,
-            "parts": [],
-            "features": [f.__dict__ for f in self.features],
-            "files": {"glb": "out/model.glb", "step": "out/model.step" if step_ok else None},
-        }
-        for p in self.parts:
-            m = meshes[p.id]
-            lo, hi = m.bounds
-            parts_json["parts"].append({
-                "id": p.id, "label": p.label, "description": p.description, "color": p.color,
-                "anchor": round_list(p.anchor if p.anchor is not None else self._auto_anchor(m), 2),
-                "key_dims": p.key_dims, "requirements": p.requirements, "print_group": p.print_group,
-                "bbox_mm": {"min": round_list(lo), "max": round_list(hi), "size": round_list(hi - lo)},
-                "volume_mm3": round(float(m.volume), 1),
-                "watertight": bool(m.is_watertight),
-            })
-        (d / "parts.json").write_text(json.dumps(parts_json, ensure_ascii=False, indent=2), encoding="utf-8")
+        # the previous parts.json is kept as out/parts.prev.json to detect unintended changes
+        if (d / PARTS_JSON).exists():
+            shutil.copy2(d / PARTS_JSON, out / "parts.prev.json")
+        write_json(d / PARTS_JSON, self._parts_json(meshes, groups, group_info, step_ok))
 
-        # ---- analysis and viewer
-        from .analyze import analyze_dir
+        from .analyze import BLOCKING, analyze_dir
         from .viewer import build_viewer
         analysis = analyze_dir(d)
         viewer_path = build_viewer(d)
 
-        crit = [f for f in analysis["findings"] if f["severity"] in ("critical", "major")]
+        findings = analysis["findings"]
         return {
             "model_dir": str(d),
             "viewer": str(viewer_path),
             "size_mm": analysis["summary"]["size_mm"],
             "auto_check": analysis["summary"]["verdict_hint"],
-            "critical_or_major": [f"{f['severity']}: {f['issue']}" for f in crit],
-            "warnings": [f["issue"] for f in analysis["findings"] if f["severity"] == "warning"],
+            "critical_or_major": [f"{f['severity']}: {f['issue']}" for f in findings if f["severity"] in BLOCKING],
+            "warnings": [f["issue"] for f in findings if f["severity"] == "warning"],
         }
