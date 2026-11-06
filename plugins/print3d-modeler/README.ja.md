@@ -16,6 +16,7 @@ Claude デスクトップアプリの Cowork で動かす前提で作ってい�
 | 「レビューし直して」／`/print3d-modeler:review` | review | 印刷可能性・要望充足のレビューだけ再実行 |
 | 「STLを出力して」／`/print3d-modeler:export` | export | 印刷の向きで 3MF/STL と印刷メモを書き出す |
 | 「プリンタは A1 mini です」／`/print3d-modeler:printer` | printer | 造形範囲・ノズル径・材料を設定 |
+| 「使い方を教えて」／`/print3d-modeler:help` | help | コマンド・作業の流れ・始め方を説明し、作業中のモデルも一覧で表示 |
 
 ## 進み方
 
@@ -54,7 +55,7 @@ Claude デスクトップアプリの Cowork で動かす前提で作ってい�
 ```
 print3d-modeler/
 ├── .claude-plugin/plugin.json
-├── skills/            model, resume, view, review, export, printer（ユーザー向け）
+├── skills/            model, resume, view, review, export, printer, help（ユーザー向け）
 │                      printability-rules, modeling-conventions（内部の判定基準・規約）
 ├── agents/            printability-reviewer, requirements-reviewer（読み取り専用のレビュアー）
 └── runtime/           setup_env.sh, requirements.txt, p3d/（Python ライブラリ）, viewer/（テンプレートと three.js）
