@@ -1,0 +1,43 @@
+{
+  "$comment": "parts.json の項目（model.py の LabeledModel.build() が生成する）。座標は設計姿勢・mm。",
+  "model": "phone-stand",
+  "title": "スマホスタンド",
+  "units": "mm",
+  "up_axis": "+Z",
+  "front_axis": "-Y",
+  "right_axis": "+X",
+  "print_orientation": {
+    "rotation_deg": [0, 0, 0],
+    "bed_face": "台座の底面",
+    "groups": {
+      "main": {
+        "rotation_deg": [0, 0, 0],
+        "bed_face": "台座の底面",
+        "matrix": [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]],
+        "parts": ["base", "backrest"],
+        "size_mm": [80, 90, 100]
+      }
+    }
+  },
+  "objects": {"main": "スマホスタンド"},
+  "print_note": "台座の底面を下にして印刷",
+  "parts": [
+    {
+      "id": "base",
+      "label": "台座",
+      "description": "ベッドに接地する土台の板",
+      "color": "#F28E2B",
+      "anchor": [0, -20, 6],
+      "key_dims": {"幅": 80, "奥行": 90, "厚み": 6},
+      "requirements": ["R1"],
+      "print_group": "main",
+      "bbox_mm": {"min": [-40, -45, 0], "max": [40, 45, 6], "size": [80, 90, 6]},
+      "volume_mm3": 43200.0,
+      "watertight": true
+    }
+  ],
+  "features": [
+    {"id": "cable_slot", "label": "ケーブル用切り欠き", "position": [0, -38, 8], "description": "幅 16mm の溝", "requirements": ["R5"]}
+  ],
+  "files": {"glb": "out/model.glb", "step": "out/model.step"}
+}

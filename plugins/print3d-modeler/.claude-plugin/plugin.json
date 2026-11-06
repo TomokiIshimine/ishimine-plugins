@@ -1,0 +1,20 @@
+{
+  "name": "print3d-modeler",
+  "version": "0.2.2",
+  "description": "Design 3D models through conversation in Python (build123d), check them in a 3D viewer with independent printability and requirements reviews, and export print-ready STL / 3MF for FDM 3D printers.",
+  "author": {
+    "name": "Tomoki Ishimine (イシミネ)",
+    "url": "https://github.com/TomokiIshimine"
+  },
+  "keywords": [
+    "3d-printing",
+    "fdm",
+    "cad",
+    "build123d",
+    "stl",
+    "3mf"
+  ],
+  "homepage": "https://github.com/TomokiIshimine/ishimine-plugins/tree/main/plugins/print3d-modeler",
+  "repository": "https://github.com/TomokiIshimine/ishimine-plugins",
+  "license": "MIT"
+}
