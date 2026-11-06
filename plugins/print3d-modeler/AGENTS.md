@@ -9,7 +9,7 @@ Rules for `plugins/print3d-modeler/`. They add to the repository root `AGENTS.md
 Flow driven by the `model` skill: hearing → design (named parts, dimensions, print orientation) → Python model (`model.py`, build123d) → automatic measurements (`p3d.analyze`) → two read-only reviewer subagents in parallel (`printability-reviewer`, `requirements-reviewer`, at most 3 fix rounds) → user check in an offline 3D viewer → export of STL / 3MF in print orientation plus print notes.
 
 ```
-skills/      model (entry), resume, view, review, export, printer          user-facing skills
+skills/      model (entry), resume, view, review, export, printer, help    user-facing skills
              modeling-conventions, printability-rules                       internal rule books (user-invocable: false)
 agents/      printability-reviewer, requirements-reviewer                  read-only, reply with JSON only
 runtime/     setup_env.sh, requirements.txt                                 venv in $CLAUDE_PLUGIN_DATA or ~/.print3d-modeler

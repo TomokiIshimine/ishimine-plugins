@@ -74,6 +74,7 @@ The viewer UI is available in English and Japanese.
 | "Review it again" / `/print3d-modeler:review` | review | Reruns only the printability and requirements reviews |
 | "Export the STL" / `/print3d-modeler:export` | export | Writes 3MF / STL in print orientation plus print notes |
 | "My printer is an A1 mini" / `/print3d-modeler:printer` | printer | Sets build volume, nozzle size and material |
+| "How do I use this?" / `/print3d-modeler:help` | help | Explains the commands, the workflow and how to get started, and lists your models in progress |
 
 ## Printer settings
 
@@ -121,7 +122,7 @@ The viewer UI is available in **English and Japanese**. Claude picks the one tha
 ```
 print3d-modeler/
 ├── .claude-plugin/plugin.json
-├── skills/            model, resume, view, review, export, printer (user-facing)
+├── skills/            model, resume, view, review, export, printer, help (user-facing)
 │                      printability-rules, modeling-conventions (internal rules and conventions)
 ├── agents/            printability-reviewer, requirements-reviewer (read-only reviewers)
 └── runtime/           setup_env.sh, requirements.txt, p3d/ (Python library), viewer/ (template and three.js)
