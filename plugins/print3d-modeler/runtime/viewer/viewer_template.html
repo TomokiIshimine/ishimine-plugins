@@ -189,10 +189,11 @@ const M = window.MODEL;
 const L = window.P3D_I18N[window.P3D_LANG];
 document.documentElement.lang = window.P3D_LANG;
 document.title = M.title ? `${M.title} – ${L.pageTitle}` : L.pageTitle;
-document.querySelectorAll("[data-i18n]").forEach((el) => { el.textContent = L[el.dataset.i18n]; });
-document.querySelectorAll("[data-i18n-title]").forEach((el) => { el.title = L[el.dataset.i18nTitle]; });
+document.querySelectorAll("[data-i18n]").forEach((node) => { node.textContent = L[node.dataset.i18n]; });
+document.querySelectorAll("[data-i18n-title]").forEach((node) => { node.title = L[node.dataset.i18nTitle]; });
 THREE.Object3D.DEFAULT_UP.set(0, 0, 1);          // 3D printer convention: Z is up
 const $ = (id) => document.getElementById(id);
+const v3 = (a) => new THREE.Vector3(...a);
 const css = getComputedStyle(document.documentElement);
 const cssv = (k) => css.getPropertyValue(k).trim();
 const DIRS = [
@@ -206,6 +207,16 @@ const DIRS = [
 const pid = (i) => `P${i + 1}`;
 const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const fmtDims = (kd) => Object.entries(kd || {}).map(([k, v]) => `${k} ${v}`).join(" / ");
+const el = (tag, props) => Object.assign(document.createElement(tag), props);
+// Mouse event -> normalized device coordinates (-1..1) within an element
+function toNdc(e, target) {
+  const r = target.getBoundingClientRect();
+  return new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+}
+// Mark the buttons matching [data-<key>] as pressed when their value equals current
+function setPressed(key, current) {
+  document.querySelectorAll(`[data-${key}]`).forEach((b) => b.setAttribute("aria-pressed", String(b.dataset[key] === current)));
+}
 
 // ---------------------------------------------------------------- scene
 const host = $("view");
@@ -222,7 +233,7 @@ const fill = new THREE.DirectionalLight(0xffffff, 0.5); fill.position.set(2, 1, 
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.zoomSpeed = 2.0;
-controls.zoomToCursor = true;          // カーソルのある所へ寄る（細部を見やすく）
+controls.zoomToCursor = true;          // zoom toward the cursor (easier to inspect details)
 controls.screenSpacePanning = true;
 controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.PAN };
 renderer.domElement.addEventListener("pointerdown", (e) => { if (e.shiftKey && e.button === 0) controls.mouseButtons.LEFT = THREE.MOUSE.PAN; });
@@ -266,6 +277,9 @@ const groupMatrix = {};
 for (const [g, info] of Object.entries(M.groups)) {
   const m = new THREE.Matrix4(); m.set(...info.matrix.flat()); groupMatrix[g] = m;
 }
+const IDENTITY = new THREE.Matrix4();
+// Matrix that places a group in the current view mode (print orientation, or as designed)
+const poseMatrix = (group) => (mode === "print" ? groupMatrix[group] : IDENTITY);
 const modelRoot = new THREE.Group(); scene.add(modelRoot);
 const meshes = [];
 const designBox = new THREE.Box3();
@@ -302,35 +316,31 @@ for (const [g, ov] of Object.entries(M.overlays || {})) {
   }
 }
 function placeOverlays() {
-  for (const m of overlayMeshes) {
-    if (mode === "print") m.matrix.copy(groupMatrix[m.userData.group]); else m.matrix.identity();
-    m.matrixWorldNeedsUpdate = true;
-  }
+  for (const m of overlayMeshes) { m.matrix.copy(poseMatrix(m.userData.group)); m.matrixWorldNeedsUpdate = true; }
 }
 
 const dSize = designBox.getSize(new THREE.Vector3());
 const R = Math.max(dSize.x, dSize.y, dSize.z, 10);
 
 // ---------------------------------------------------------------- part labels and feature labels (hidden at first)
+const dotMesh = (radius, color) => new THREE.Mesh(new THREE.SphereGeometry(radius), new THREE.MeshBasicMaterial({ color }));
 const labelObjs = M.parts.map((p, i) => {
-  const el = document.createElement("div");
-  el.className = "lbl"; el.style.borderColor = p.color;
-  el.innerHTML = `<small>${pid(i)}</small>${esc(p.label)}`;
-  el.addEventListener("mouseenter", (e) => { setHover([i]); showTip(e, i); });
-  el.addEventListener("mouseleave", () => { setHover(null); hideTip(); });
-  const obj = new CSS2DObject(el);
+  const div = el("div", { className: "lbl", innerHTML: `<small>${pid(i)}</small>${esc(p.label)}` });
+  div.style.borderColor = p.color;
+  div.addEventListener("mouseenter", (e) => { setHover([i]); showTip(e, i); });
+  div.addEventListener("mouseleave", () => { setHover(null); hideTip(); });
+  const obj = new CSS2DObject(div);
   const line = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: p.color }));
-  const dot = new THREE.Mesh(new THREE.SphereGeometry(R * 0.008), new THREE.MeshBasicMaterial({ color: p.color }));
+  const dot = dotMesh(R * 0.008, p.color);
   scene.add(obj, line, dot);
-  return { obj, line, dot, el, part: p, index: i };
+  return { obj, line, dot, el: div, part: p, index: i };
 });
 const featObjs = (M.features || []).map((f) => {
-  const el = document.createElement("div");
-  el.className = "feat"; el.textContent = `◇ ${f.label}`; el.title = f.description || "";
-  const obj = new CSS2DObject(el); obj.center.set(0.5, -0.3);
-  const dot = new THREE.Mesh(new THREE.SphereGeometry(R * 0.01), new THREE.MeshBasicMaterial({ color: 0x5a6876 }));
+  const div = el("div", { className: "feat", textContent: `◇ ${f.label}`, title: f.description || "" });
+  const obj = new CSS2DObject(div); obj.center.set(0.5, -0.3);
+  const dot = dotMesh(R * 0.01, 0x5a6876);
   scene.add(obj, dot);
-  return { obj, dot, el, f, part: nearestPart(f.position) };
+  return { obj, dot, el: div, f, part: nearestPart(f.position) };
 });
 
 // ---------------------------------------------------------------- bed, directions, size-reference coin
@@ -342,7 +352,7 @@ let coinLabel;
 {
   const cm = new THREE.Mesh(new THREE.CylinderGeometry(10, 10, 1.5, 48), new THREE.MeshStandardMaterial({ color: 0xc9ccd1, metalness: .6, roughness: .35 }));
   cm.rotation.x = Math.PI / 2; cm.position.z = 0.75; coin.add(cm);
-  coinLabel = new CSS2DObject(Object.assign(document.createElement("div"), { className: "coin", textContent: L.coin }));
+  coinLabel = new CSS2DObject(el("div", { className: "coin", textContent: L.coin }));
   coinLabel.position.set(0, 0, 4); coinLabel.center.set(0.5, 1.4); coin.add(coinLabel);
 }
 function buildBed(mode, box) {
@@ -374,15 +384,15 @@ function buildDirs(box) {
   const reach = Math.max(s.x, s.y) * 0.5 + R * 0.35;
   for (const d of DIRS) {
     if (d.key === "down") continue;
-    const v = new THREE.Vector3(...d.v);
+    const v = v3(d.v);
     const origin = d.key === "up"
       ? new THREE.Vector3(c.x - reach * .9, c.y + reach * .9, 0)
       : new THREE.Vector3(c.x, c.y, 0.2).add(v.clone().multiplyScalar(reach));
     const len = d.key === "up" ? s.z * 0.9 + 10 : R * 0.3;
     dirGroup.add(new THREE.ArrowHelper(v, origin, len, new THREE.Color(d.color), len * 0.22, len * 0.12));
-    const el = Object.assign(document.createElement("div"), { className: "dir", textContent: L.dirs[d.key] });
-    el.style.background = d.color;
-    const lab = new CSS2DObject(el);
+    const div = el("div", { className: "dir", textContent: L.dirs[d.key] });
+    div.style.background = d.color;
+    const lab = new CSS2DObject(div);
     lab.position.copy(origin.clone().add(v.clone().multiplyScalar(len * 1.18)));
     dirGroup.add(lab); dirLabels.push(lab);
   }
@@ -396,13 +406,12 @@ function setMode(m) {
   mode = m;
   curBox.makeEmpty();
   for (const mesh of meshes) {
-    if (m === "print") mesh.matrix.copy(groupMatrix[mesh.userData.part.group]);
-    else mesh.matrix.identity();
+    mesh.matrix.copy(poseMatrix(mesh.userData.part.group));
     mesh.matrixWorldNeedsUpdate = true;
     tmpBox.copy(mesh.geometry.boundingBox).applyMatrix4(mesh.matrix); curBox.union(tmpBox);
   }
-  const xf = (p, part) => {
-    const v = new THREE.Vector3(...p);
+  const xf = (p, part) => {                     // design-pose point of a part -> current view
+    const v = v3(p);
     if (m === "print" && part !== undefined) v.applyMatrix4(groupMatrix[M.parts[part].group]);
     return v;
   };
@@ -421,14 +430,14 @@ function setMode(m) {
   buildDirs(designBox);
   placeOverlays();
   applyVisibility();
-  document.querySelectorAll("[data-mode]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mode === m)));
+  setPressed("mode", m);
   $("gizmo").style.display = m === "print" ? "none" : "";
   viewFrom(VIEWS[VIEWS.length - 1][1]);
 }
 function nearestPart(p) {
   let best = Infinity, bi;
   meshes.forEach((m, i) => {
-    const d = m.geometry.boundingBox.distanceToPoint(new THREE.Vector3(...p));
+    const d = m.geometry.boundingBox.distanceToPoint(v3(p));
     if (d < best) { best = d; bi = i; }
   });
   return bi;
@@ -442,34 +451,39 @@ const gScene = new THREE.Scene();
 const gCam = new THREE.OrthographicCamera(-1.6, 1.6, 1.6, -1.6, 0.1, 10);
 const gTargets = [];
 for (const d of DIRS) {
-  const v = new THREE.Vector3(...d.v);
-  const neg = ["down", "back", "left"].includes(d.key);
+  const v = v3(d.v);
+  const neg = ["down", "back", "left"].includes(d.key);   // negative directions: hollow marker, no arrow
   if (!neg) gScene.add(new THREE.ArrowHelper(v, new THREE.Vector3(), 0.85, new THREE.Color(d.color), 0.2, 0.12));
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: textSprite(L.gizmo[d.key], d.color, neg), depthTest: false }));
   sp.position.copy(v.clone().multiplyScalar(1.15)); sp.scale.setScalar(neg ? 0.42 : 0.5);
   sp.userData.dir = v; gScene.add(sp); gTargets.push(sp);
 }
 gCanvas.addEventListener("click", (e) => {
-  const r = gCanvas.getBoundingClientRect();
-  const p = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
-  const rc = new THREE.Raycaster(); rc.setFromCamera(p, gCam);
+  const rc = new THREE.Raycaster(); rc.setFromCamera(toNdc(e, gCanvas), gCam);
   const hit = rc.intersectObjects(gTargets)[0];
   if (hit) viewFrom(hit.object.userData.dir.toArray());
 });
+// Round marker with a letter, drawn on a canvas (hollow = outlined, for the negative directions)
+function textSprite(t, color, hollow) {
+  const c = el("canvas", { width: 128, height: 128 });
+  const x = c.getContext("2d");
+  x.beginPath(); x.arc(64, 64, 58, 0, Math.PI * 2);
+  if (hollow) { x.fillStyle = "#ffffff"; x.fill(); x.lineWidth = 8; x.strokeStyle = color; x.stroke(); }
+  else { x.fillStyle = color; x.fill(); }
+  x.fillStyle = hollow ? color : "#ffffff";
+  x.font = "bold 72px system-ui,'Hiragino Sans','Noto Sans JP',sans-serif"; x.textAlign = "center"; x.textBaseline = "middle";
+  x.fillText(t, 64, 70);
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; return tex;
+}
 
 // ---------------------------------------------------------------- toolbar
 const VIEWS = [[0, -1, 0], [0, 1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0.9, -1.3, 0.9]]
   .map((v, i) => [L.views[i], v]);
 const tb = $("toolbar");
-for (const [name, m] of [[L.modeDesign, "design"], [L.modePrint, "print"]]) {
-  const b = Object.assign(document.createElement("button"), { className: "chip", textContent: name });
-  b.dataset.mode = m; b.onclick = () => setMode(m); tb.appendChild(b);
-}
-tb.appendChild(Object.assign(document.createElement("span"), { className: "sep" }));
-for (const [name, v] of VIEWS) {
-  const b = Object.assign(document.createElement("button"), { className: "chip", textContent: name });
-  b.onclick = () => viewFrom(v); tb.appendChild(b);
-}
+const chip = (name, onclick) => tb.appendChild(el("button", { className: "chip", textContent: name, onclick }));
+for (const [name, m] of [[L.modeDesign, "design"], [L.modePrint, "print"]]) chip(name, () => setMode(m)).dataset.mode = m;
+tb.appendChild(el("span", { className: "sep" }));
+for (const [name, v] of VIEWS) chip(name, () => viewFrom(v));
 // Frame the visible (checked) parts. If none are checked, frame everything
 function visibleBox() {
   const box = new THREE.Box3();
@@ -477,7 +491,7 @@ function visibleBox() {
   return box.isEmpty() ? curBox : box;
 }
 function viewFrom(v) {
-  const dir = new THREE.Vector3(...v).normalize();
+  const dir = v3(v).normalize();
   if (Math.abs(dir.z) > 0.999) dir.y -= 0.001;
   const box = visibleBox();
   const c = box.getCenter(new THREE.Vector3());
@@ -511,13 +525,14 @@ const objects = (M.objects && M.objects.length) ? M.objects
   : [...new Set(M.parts.map((p) => p.group))].map((g) => ({ id: g, label: g }));
 const nested = objects.length > 1;             // with a single object, list the parts only
 const partRows = [], objRows = [];
+function showOnly(idx) { shown.fill(false); idx.forEach((i) => { shown[i] = true; }); applyVisibility(); }
 for (const o of objects) {
   const idx = M.parts.map((p, i) => [p, i]).filter(([p]) => p.group === o.id).map(([, i]) => i);
   if (!idx.length) continue;
-  const wrap = document.createElement("div"); wrap.className = "obj";
+  const wrap = el("div", { className: "obj" });
   let kids = wrap;
   if (nested) {
-    const r = document.createElement("div"); r.className = "row head";
+    const r = el("div", { className: "row head" });
     r.innerHTML = `<button class="caret" title="${esc(L.toggleObj)}">▼</button><input type="checkbox" checked>`
       + `<span class="name">${esc(o.label)} <span class="cnt">${esc(L.nParts(idx.length))}</span></span>`
       + `<button class="mini only" title="${esc(L.onlyObj)}">${esc(L.only)}</button>`;
@@ -525,16 +540,16 @@ for (const o of objects) {
     cb.onchange = () => { idx.forEach((i) => { shown[i] = cb.checked; }); applyVisibility(); };
     r.querySelector(".caret").onclick = () => wrap.classList.toggle("closed");
     r.querySelector(".name").onclick = () => wrap.classList.toggle("closed");
-    r.querySelector(".only").onclick = () => { shown.fill(false); idx.forEach((i) => { shown[i] = true; }); applyVisibility(); };
+    r.querySelector(".only").onclick = () => showOnly(idx);
     r.onmouseenter = () => setHover(idx); r.onmouseleave = () => setHover(null);
     wrap.appendChild(r);
-    kids = Object.assign(document.createElement("div"), { className: "kids" });
+    kids = el("div", { className: "kids" });
     wrap.appendChild(kids);
     objRows.push({ cb, idx });
   }
   for (const i of idx) {
     const p = M.parts[i];
-    const r = document.createElement("div"); r.className = "row";
+    const r = el("div", { className: "row" });
     r.innerHTML = `<input type="checkbox" checked><span class="pid">${pid(i)}</span><span class="sw" style="background:${p.color}"></span>`
       + `<span class="name">${esc(p.label)}<span class="dims">${esc(fmtDims(p.key_dims))}</span></span>`
       + `<button class="mini only" title="${esc(L.onlyPart)}">${esc(L.only)}</button>`;
@@ -542,7 +557,7 @@ for (const o of objects) {
     const cb = r.querySelector("input");
     cb.onchange = () => { shown[i] = cb.checked; applyVisibility(); };
     r.querySelector(".name").onclick = () => { shown[i] = !shown[i]; applyVisibility(); };
-    r.querySelector(".only").onclick = () => { shown.fill(false); shown[i] = true; applyVisibility(); };
+    r.querySelector(".only").onclick = () => showOnly([i]);
     r.onmouseenter = () => setHover([i]); r.onmouseleave = () => setHover(null);
     kids.appendChild(r);
     partRows[i] = { r, cb };
@@ -562,13 +577,13 @@ function applyVisibility() {
     m.userData.mat.depthWrite = on;
     m.userData.edges.material.opacity = on ? .35 : .12;
     m.renderOrder = on ? 0 : 1;
-    partRows[i]?.cb && (partRows[i].cb.checked = on);
+    if (partRows[i]) partRows[i].cb.checked = on;
   });
   objRows.forEach(({ cb, idx }) => {
     const n = idx.filter((i) => shown[i]).length;
     cb.checked = n === idx.length; cb.indeterminate = n > 0 && n < idx.length;
   });
-  document.querySelectorAll("[data-ghost]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.ghost === ghostMode)));
+  setPressed("ghost", ghostMode);
   const lab = $("tgLabels").checked;
   labelObjs.forEach((l) => {
     const vis = lab && (shown[l.index] || ghost);
@@ -591,7 +606,7 @@ for (const id of ["tgLabels", "tgDirs", "tgOver", "tgContact", "tgCoin"]) $(id).
 let hovered = [];
 function setHover(list) {
   hovered.forEach((i) => meshes[i].userData.mat.emissive.setHex(0x000000));
-  hovered = list == null ? [] : Array.isArray(list) ? list : [list];
+  hovered = list || [];
   hovered.forEach((i) => meshes[i].userData.mat.emissive.setHex(0x553311));
   partRows.forEach((pr, i) => pr?.r.classList.toggle("hl", hovered.length === 1 && hovered[0] === i));
 }
@@ -609,10 +624,9 @@ function showTip(e, i) {
 }
 function hideTip() { tip.style.display = "none"; }
 const rc = new THREE.Raycaster();
-const ndc = (e) => { const r = renderer.domElement.getBoundingClientRect();
-  return new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1); };
+const solidMeshes = () => meshes.filter((m, i) => shown[i]);
 // Pick through transparent parts to the visible part behind them
-const pick = (e) => { rc.setFromCamera(ndc(e), camera); return rc.intersectObjects(meshes.filter((m, i) => shown[i]), false)[0]; };
+const pick = (e) => { rc.setFromCamera(toNdc(e, renderer.domElement), camera); return rc.intersectObjects(solidMeshes(), false)[0]; };
 let lastMove = 0;
 renderer.domElement.addEventListener("pointermove", (e) => {
   if (e.buttons) { hideTip(); return; }
@@ -638,14 +652,14 @@ function resize() {
 new ResizeObserver(resize).observe(host); resize();
 const occRay = new THREE.Raycaster();
 function updateOcclusion() {
-  const solid = meshes.filter((m, i) => shown[i]);
+  const solid = solidMeshes();
   const items = [...labelObjs.filter((l) => l.obj.visible).map((l) => [l.dot.position, l.el]),
                  ...featObjs.filter((f) => f.obj.visible).map((f) => [f.dot.position, f.el]),
                  ...(dirGroup.visible ? dirLabels.map((d) => [d.position, d.element]) : [])];
-  for (const [p, el] of items) {
+  for (const [p, node] of items) {
     const dir = p.clone().sub(camera.position); const dist = dir.length();
     occRay.set(camera.position, dir.normalize()); occRay.far = dist - R * 0.01;
-    el.classList.toggle("behind", occRay.intersectObjects(solid, false).length > 0);
+    node.classList.toggle("behind", occRay.intersectObjects(solid, false).length > 0);
   }
 }
 let frame = 0;
@@ -660,18 +674,6 @@ setMode("design");
   requestAnimationFrame(tick);
 })();
 window.__ready = true;
-
-function textSprite(t, color, hollow) {
-  const c = document.createElement("canvas"); c.width = c.height = 128;
-  const x = c.getContext("2d");
-  x.beginPath(); x.arc(64, 64, 58, 0, Math.PI * 2);
-  if (hollow) { x.fillStyle = "#ffffff"; x.fill(); x.lineWidth = 8; x.strokeStyle = color; x.stroke(); }
-  else { x.fillStyle = color; x.fill(); }
-  x.fillStyle = hollow ? color : "#ffffff";
-  x.font = "bold 72px system-ui,'Hiragino Sans','Noto Sans JP',sans-serif"; x.textAlign = "center"; x.textBaseline = "middle";
-  x.fillText(t, 64, 70);
-  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; return tex;
-}
 </script>
 <script>
   // Shown when three.js fails to start (old browsers, etc.)

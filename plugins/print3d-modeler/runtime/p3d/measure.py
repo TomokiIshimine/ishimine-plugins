@@ -16,7 +16,7 @@ from pathlib import Path
 import numpy as np
 import trimesh
 
-from .analyze import load_dir
+from .files import load_dir
 from .meshutil import round_list
 
 
@@ -52,6 +52,27 @@ def section(meshes, axis_val):
     return out
 
 
+def distance(meshes, a, b):
+    """Shortest distance from part a's surface (sampled) to part b."""
+    pa, _ = trimesh.sample.sample_surface_even(meshes[a], 4000)
+    _, dist, _ = trimesh.proximity.closest_point(meshes[b], pa)
+    k = int(np.argmin(dist))
+    return {"a": a, "b": b, "min_distance_mm": round(float(dist[k]), 3), "at": round_list(pa[k])}
+
+
+def overall(pj, meshes, meta):
+    lo, hi = trimesh.util.concatenate(list(meshes.values())).bounds
+    return {"model": pj["model"], "overall_size": round_list(hi - lo), "overall_min": round_list(lo),
+            "overall_max": round_list(hi),
+            "parts": [part_info(pid, m, meta[pid]) for pid, m in meshes.items()]}
+
+
+def _args_after(argv, flag, n=1):
+    """The n values that follow flag on the command line."""
+    i = argv.index(flag)
+    return [argv[i + 1 + k] for k in range(n)]
+
+
 def ray(meshes, origin, direction):
     o = np.array([float(v) for v in origin.split(",")])
     dvec = np.array([float(v) for v in direction.split(",")])
@@ -74,26 +95,16 @@ def main(argv):
     pj, meshes = load_dir(d)
     meta = {p["id"]: p for p in pj["parts"]}
     if "--part" in argv:
-        pid = argv[argv.index("--part") + 1]
+        pid, = _args_after(argv, "--part")
         res = part_info(pid, meshes[pid], meta[pid])
     elif "--section" in argv:
-        res = section(meshes, argv[argv.index("--section") + 1])
+        res = section(meshes, *_args_after(argv, "--section"))
     elif "--distance" in argv:
-        i = argv.index("--distance")
-        a, b = argv[i + 1], argv[i + 2]
-        pa, _ = trimesh.sample.sample_surface_even(meshes[a], 4000)
-        _, dist, _ = trimesh.proximity.closest_point(meshes[b], pa)
-        k = int(np.argmin(dist))
-        res = {"a": a, "b": b, "min_distance_mm": round(float(dist[k]), 3), "at": round_list(pa[k])}
+        res = distance(meshes, *_args_after(argv, "--distance", 2))
     elif "--ray" in argv:
-        i = argv.index("--ray")
-        res = ray(meshes, argv[i + 1], argv[i + 2])
+        res = ray(meshes, *_args_after(argv, "--ray", 2))
     else:
-        allm = trimesh.util.concatenate(list(meshes.values()))
-        lo, hi = allm.bounds
-        res = {"model": pj["model"], "overall_size": round_list(hi - lo), "overall_min": round_list(lo),
-               "overall_max": round_list(hi),
-               "parts": [part_info(pid, m, meta[pid]) for pid, m in meshes.items()]}
+        res = overall(pj, meshes, meta)
     print(json.dumps(res, ensure_ascii=False, indent=2))
     return 0
 
