@@ -8,15 +8,15 @@ When you are happy with it, you get **3MF / STL files placed in print orientatio
 
 Built for Cowork in the Claude desktop app. It also works in Claude Code.
 
-![The 3D viewer: a phone stand with part labels, direction labels and the parts panel](../../docs/images/print3d-modeler/en/viewer-overview.png)
+![The 3D viewer: a small house with eight named parts, direction labels and the parts panel](../../docs/images/print3d-modeler/en/viewer-overview.png)
 
 ## What it does
 
 - **Asks before it builds.** Claude asks multiple-choice questions about purpose, size, shape, how parts fit together and your printer, and writes the answers down as numbered requirements (R1, R2…).
-- **Designs in named parts.** The model is split into parts such as "Base" or "Backrest", so you and Claude can refer to them by name.
+- **Designs in named parts.** The model is split into parts such as "Roof", "Chimney" or "Windows", so you and Claude can refer to them by name.
 - **Checks printability with real measurements.** Watertightness, wall thickness, overhangs, bridges, bed contact and build volume are measured automatically after every build.
 - **Gets a second opinion.** Two read-only subagents review the model in parallel: one checks whether it will print, the other whether it meets your requirements. Claude fixes what they find, up to 3 rounds, before showing you anything.
-- **Lets you see it in 3D.** A single-file HTML viewer shows the model with part names and directions, so you can say "make the backrest 10 mm taller" or "move the front lip toward the front".
+- **Lets you see it in 3D.** A single-file HTML viewer shows the model with part names and directions, so you can say "make the roof 5 mm higher" or "move the chimney to the left".
 - **Exports print-ready files.** 3MF / STL in print orientation, plus print notes with recommended settings and whether supports are needed.
 
 ## Install
@@ -47,9 +47,9 @@ The viewer is how you check the model and tell Claude what to change. It is one 
 
 **Look at any detail.** Drag to rotate, scroll to zoom toward the cursor, right-drag to pan, and double-click a point to rotate around it. The buttons at the top jump to front, back, left, right, top, bottom or an overview.
 
-**Know what every part is called.** Hover over a part to see its name, description and key dimensions. Part labels (P1 Base, P2 Backrest…) and the direction labels (up/down, front/back, left/right) give you the words to use in chat.
+**Know what every part is called.** Hover over a part to see its name, description and key dimensions. Part labels (P1 Base, P2 Walls, P3 Roof…) and the direction labels (up/down, front/back, left/right) give you the words to use in chat.
 
-![Hovering a part shows its name, description and size](../../docs/images/print3d-modeler/en/viewer-hover.png)
+![Hovering the chimney shows its name, description and size](../../docs/images/print3d-modeler/en/viewer-hover.png)
 
 **Switch views to check different things.** The panel at the top right (or the P key) lets you:
 
@@ -58,7 +58,9 @@ The viewer is how you check the model and tell Claude what to change. It is one 
 - Highlight **faces likely to need support** (red) and **faces touching the bed** (blue), judged in print orientation.
 - Show a Ø20 mm coin for scale.
 
-![Print orientation: the underside of the arm needs support (red), the bottom of the base sits on the bed (blue)](../../docs/images/print3d-modeler/en/viewer-print.png)
+In the house below, the eaves, the door canopy and the window frames are shaped with sloped undersides, so no face is flagged as needing support and it prints as is.
+
+![Print orientation with the support check on: the eaves, door canopy and window frames have sloped undersides, so nothing is flagged red](../../docs/images/print3d-modeler/en/viewer-print.png)
 
 The viewer UI is available in English and Japanese.
 
@@ -91,7 +93,7 @@ Claude creates `print3d/<model-name>/` under the folder you choose and keeps eve
 ```
 print3d/
 ├── printer.json         printer settings shared by all models
-└── phone-stand/
+└── small-house/
     ├── spec.md          requirements (R1, R2…) and your feedback
     ├── design.md        parts, dimensions, print orientation
     ├── model.py         the model in Python (build123d)
