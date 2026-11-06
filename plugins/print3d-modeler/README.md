@@ -62,6 +62,8 @@ In the house below, the eaves, the door canopy and the window frames are shaped 
 
 ![Print orientation with the support check on: the eaves, door canopy and window frames have sloped undersides, so nothing is flagged red](../../docs/images/print3d-modeler/en/viewer-print.png)
 
+On a phone, the 3D view fills the screen, the buttons become icons, the panel slides up from the bottom, and tapping a part shows its name.
+
 The viewer UI is available in English and Japanese.
 
 ## Skills

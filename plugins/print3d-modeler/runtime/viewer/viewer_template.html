@@ -61,7 +61,9 @@
   .bar { display: inline-flex; align-items: center; gap: 2px; padding: 3px; background: var(--surface);
     border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); }
   .bar button { border: 0; background: transparent; padding: 5px 11px; border-radius: 7px; cursor: pointer;
-    font-size: 13px; white-space: nowrap; color: var(--ink-soft); }
+    font-size: 13px; white-space: nowrap; color: var(--ink-soft); display: inline-flex; align-items: center; gap: 6px; }
+  .bar button .ic { width: 16px; height: 16px; flex: none; }
+  .bar button.view-fit .ic { display: none; }      /* icon only on phones */
   .bar button:hover { background: var(--surface-2); color: var(--ink); }
   .bar button[aria-pressed="true"] { background: var(--ink); color: var(--surface); font-weight: 600; }
   #toolbar { position: absolute; top: 14px; left: 14px; right: 170px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
@@ -152,6 +154,8 @@
   .row .dims { display: block; color: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
   .row .only { visibility: hidden; }
   .row:hover .only, .row:focus-within .only { visibility: visible; }
+  @media (hover: none) { .row .only { visibility: visible; } }   /* touch screens cannot hover to reveal it */
+  .only { flex: none; white-space: nowrap; }
   .obj > .row.head { font-weight: 700; }
   .obj > .row .cnt { color: var(--muted); font-weight: 400; font-size: 11.5px; margin-left: 4px; }
   .caret { width: 16px; height: 16px; flex: none; border: 0; background: none; color: var(--muted); cursor: pointer; padding: 0;
@@ -173,8 +177,6 @@
   .ico.sq i { width: 12px; height: 12px; border-radius: 3px; display: block; }
   .ico.tag span { font-size: 9.5px; font-weight: 700; line-height: 1; padding: 2px 3px; border-radius: 3px;
     border: 1px solid var(--line-strong); border-left: 3px solid var(--signal); color: var(--ink-soft); }
-  .ico.axes { display: flex; gap: 2px; justify-content: center; align-items: end; }
-  .ico.axes i { width: 4px; border-radius: 1px; display: block; }
   .ico.coin-i i { width: 14px; height: 14px; border-radius: 50%; display: block;
     background: radial-gradient(circle at 35% 35%, #eceef1, #a9aeb5); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .15); }
   input.switch { appearance: none; -webkit-appearance: none; margin: 0; width: 30px; height: 18px; border-radius: 9px;
@@ -184,21 +186,37 @@
   input.switch:checked { background: var(--ink); }
   input.switch:checked::before { transform: translateX(12px); }
 
+  /* Phones: the 3D view fills the screen, the controls fit one row of icons at the top, and the panel
+     slides up from the bottom as a sheet over the view. The gizmo covers the six direction views. */
   @media (max-width: 760px) {
-    #app, #app.open { grid-template-columns: 1fr; grid-template-rows: 70vh auto; height: auto; transition: none; }
-    main { height: 70vh; }
-    aside { display: none; border-left: none; border-top: 1px solid var(--line); }
-    #app.open aside { display: block; }
-    .drawer { width: auto; height: auto; padding: 16px; }
-    #toolbar { right: 14px; top: 62px; }
-    #toolbar .bar { flex-wrap: wrap; }
-    #toolbar .bar button { padding: 4px 8px; font-size: 12px; }
-    #corner { right: 110px; }
+    #app, #app.open { display: block; height: 100vh; height: 100dvh; }
+    main { height: 100%; }
+    aside { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; border-left: none; border-top: 1px solid var(--line);
+      border-radius: 14px 14px 0 0; box-shadow: 0 -6px 24px rgba(0, 0, 0, .2);
+      transform: translateY(100%); transition: transform .22s ease, visibility 0s linear .22s; }
+    #app.open aside { transform: none; transition: transform .22s ease; }
+    .drawer { width: auto; height: auto; max-height: 50vh; max-height: 50dvh; padding: 6px 16px 24px; }
+    .drawer::before { content: ""; display: block; width: 36px; height: 4px; border-radius: 2px; background: var(--line-strong);
+      margin: 0 auto 10px; }
+    #toolbar { top: 10px; left: 10px; right: 60px; flex-wrap: nowrap; gap: 6px; }
+    #toolbar .bar button { padding: 7px 9px; }
+    #toolbar .bar button .ic { width: 18px; height: 18px; }
+    #toolbar .bar button.view-dir { display: none; }
+    #toolbar .bar button.view-fit .ic { display: block; }
+    #toolbar .lb, #panelBtnText { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+    #panelBtn { top: 10px; right: 10px; padding: 9px; }
+    #panelBtn svg { width: 18px; height: 18px; }
+    #panelBtn kbd { display: none; }
+    #corner { left: 10px; bottom: 10px; right: 100px; }
     #hint { display: none; }
     #titleBlock { min-width: 0; max-width: 100%; }
+    #titleBlock h1 { font-size: 13px; padding: 5px 9px 4px; }
     #titleBlock dl { grid-template-columns: auto auto; }
+    #titleBlock dl > div { padding: 3px 9px 4px; }
     #titleBlock dl > div:nth-child(3) { display: none; }
-    #gizmo { width: 84px; height: 84px; }
+    #titleBlock dt { font-size: 10px; }
+    #titleBlock dd { font-size: 12px; }
+    #gizmo { right: 10px; bottom: 10px; width: 84px; height: 84px; }
   }
   @media (prefers-reduced-motion: reduce) {
     *, *::before { transition: none !important; }
@@ -248,7 +266,7 @@
         <h2><span data-i18n="display"></span></h2>
         <label class="tg"><span class="ico tag"><span>P1</span></span><span class="txt" data-i18n="tgLabels"></span>
           <input type="checkbox" class="switch" id="tgLabels"></label>
-        <label class="tg"><span class="ico axes"><i style="height:9px;background:var(--ax-x)"></i><i style="height:13px;background:var(--ax-y)"></i><i style="height:17px;background:var(--ax-z)"></i></span>
+        <label class="tg"><span class="ico"><svg viewBox="0 0 20 20" width="20" height="20" aria-hidden="true" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12V3M6.8 5.5 9 3l2.2 2.5" stroke="var(--ax-z)"/><path d="M9 12l8 3M15.3 12.5 17 15l-2.9.75" stroke="var(--ax-x)"/><path d="M9 12l-6 5M6 16.75 3 17l.8-2.9" stroke="var(--ax-y)"/></svg></span>
           <span class="txt"><span data-i18n="tgDirs"></span><small data-i18n="tgDirsNote"></small></span>
           <input type="checkbox" class="switch" id="tgDirs" checked></label>
         <label class="tg"><span class="ico sq"><i style="background:var(--support)"></i></span>
@@ -291,7 +309,7 @@ window.P3D_I18N = {
     dirs: { up: "Up", down: "Down", front: "Front", back: "Back", right: "Right", left: "Left" },
     gizmo: { up: "U", down: "D", front: "F", back: "B", right: "R", left: "L" },
     coin: "Coin (Ø20 mm)",
-    nParts: (n) => `${n} ${n === 1 ? "part" : "parts"}`, only: "Only",
+    nParts: (n) => `${n} ${n === 1 ? "part" : "parts"}`, only: "Show only this",
     onlyObj: "Show only this object", onlyPart: "Show only this part", toggleObj: "Expand / collapse",
     bbox: (s) => `Size ${s.join(" × ")} mm`,
     error: "Could not start the 3D view. Please open it in a recent version of Chrome, Edge, Safari or Firefox.",
@@ -317,7 +335,7 @@ window.P3D_I18N = {
     dirs: { up: "上", down: "下", front: "前", back: "後", right: "右", left: "左" },
     gizmo: { up: "上", down: "下", front: "前", back: "後", right: "右", left: "左" },
     coin: "1円玉（直径20mm）",
-    nParts: (n) => `${n} パーツ`, only: "のみ",
+    nParts: (n) => `${n} パーツ`, only: "これだけ表示",
     onlyObj: "このオブジェクトだけ表示", onlyPart: "このパーツだけ表示", toggleObj: "開く／たたむ",
     bbox: (s) => `外形 ${s.join(" × ")} mm`,
     error: "3D 表示を開始できませんでした。最新の Chrome / Edge / Safari / Firefox で開いてください。",
@@ -637,9 +655,20 @@ function btnGroup(label) {
   return g;
 }
 const modeBar = btnGroup(L.modeGroup), viewBar = btnGroup(L.viewGroup);
+// Icons stand in for the text on phones (the text stays for screen readers)
+const svg = (d) => `<svg class="ic" viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`;
+const ICON = {
+  design: svg("M3 17h14M5.5 17V9L10 5l4.5 4v8M8.5 17v-4h3v4"),                       // object standing where it is used
+  print: svg("M6 2.5h8v3.5H6zM8.5 6h3L10 8.5zM5.5 12.5h9M3 16.5h14"),                 // print head above a layer on the bed
+  fit: svg("M3 7V3h4M13 3h4v4M17 13v4h-4M7 17H3v-4M10 6.5l3.5 2v3.8L10 14.3l-3.5-2V8.5zM6.5 8.5 10 10.5l3.5-2M10 10.5v3.8"),
+};
+const iconButton = (name, icon, onclick) => el("button", { onclick, innerHTML: `${icon || ""}<span class="lb">${esc(name)}</span>` });
 for (const [name, m] of [[L.modeDesign, "design"], [L.modePrint, "print"]])
-  modeBar.appendChild(el("button", { textContent: name, onclick: () => setMode(m) })).dataset.mode = m;
-for (const [name, v] of VIEWS) viewBar.appendChild(el("button", { textContent: name, onclick: () => viewFrom(v) }));
+  modeBar.appendChild(iconButton(name, ICON[m], () => setMode(m))).dataset.mode = m;
+VIEWS.forEach(([name, v], i) => {
+  const last = i === VIEWS.length - 1;
+  viewBar.appendChild(iconButton(name, last ? ICON.fit : "", () => viewFrom(v))).className = last ? "view-fit" : "view-dir";
+});
 // Frame the visible (checked) parts. If none are checked, frame everything
 function visibleBox() {
   const box = new THREE.Box3();
@@ -653,17 +682,21 @@ function viewFrom(v) {
   const c = box.getCenter(new THREE.Vector3());
   const s = box.getSize(new THREE.Vector3());
   controls.target.copy(c);
-  camera.position.copy(c).add(dir.multiplyScalar(Math.max(s.x, s.y, s.z, 10) * 3.1));
+  // On a tall, narrow screen the horizontal field of view is the limit: step back so the model and its direction labels fit
+  const narrow = Math.min(1, camera.aspect / 0.8);
+  camera.position.copy(c).add(dir.multiplyScalar(Math.max(s.x, s.y, s.z, 10) * 3.1 / narrow));
   controls.update();
 }
 
 // ---------------------------------------------------------------- right panel (closed at first)
 const app = $("app"), panelBtn = $("panelBtn");
+const phone = window.matchMedia("(max-width: 760px)");      // same width as the phone layout in the CSS
 function togglePanel(open = !app.classList.contains("open")) {
   app.classList.toggle("open", open);
   panelBtn.setAttribute("aria-expanded", String(open));
   $("panelBtnText").textContent = open ? L.panelClose : L.panelOpen;
   if (open) $("hint").classList.add("folded");     // the panel is open: the user has found their way around
+  resize();
 }
 panelBtn.onclick = () => togglePanel();
 togglePanel(false);
@@ -789,7 +822,7 @@ function showTip(e, i) {
     + (p.description ? `<p>${esc(p.description)}</p>` : "")
     + `<div class="m">${esc([fmtDims(p.key_dims), L.bbox(p.size_mm)].filter(Boolean).join(" / "))}</div>`;
   const r = host.getBoundingClientRect();
-  tip.style.left = `${Math.min(e.clientX - r.left + 14, r.width - 290)}px`; tip.style.top = `${e.clientY - r.top + 14}px`;
+  tip.style.left = `${Math.min(e.clientX - r.left + 14, r.width - 290)}px`; tip.style.top = `${Math.max(8, Math.min(e.clientY - r.top + 14, r.height - 140))}px`;
   tip.style.display = "block";
 }
 function hideTip() { tip.style.display = "none"; }
@@ -804,7 +837,16 @@ renderer.domElement.addEventListener("pointermove", (e) => {
   const hit = pick(e);
   if (hit) { showTip(e, hit.object.userData.index); setHover([hit.object.userData.index]); } else { hideTip(); setHover(null); }
 });
-renderer.domElement.addEventListener("pointerleave", () => { hideTip(); setHover(null); });
+renderer.domElement.addEventListener("pointerleave", (e) => { if (e.pointerType === "mouse") { hideTip(); setHover(null); } });
+// Touch screens have no hover: a tap (a touch that barely moves) shows the part's name, a tap on empty space hides it
+let touchStart = null;
+renderer.domElement.addEventListener("pointerdown", (e) => { touchStart = e.pointerType === "mouse" ? null : [e.clientX, e.clientY]; });
+renderer.domElement.addEventListener("pointerup", (e) => {
+  if (!touchStart || Math.hypot(e.clientX - touchStart[0], e.clientY - touchStart[1]) > 8) return;
+  touchStart = null;
+  const hit = pick(e);
+  if (hit) { showTip(e, hit.object.userData.index); setHover([hit.object.userData.index]); } else { hideTip(); setHover(null); }
+});
 renderer.domElement.addEventListener("dblclick", (e) => {          // make that point the rotation center
   const hit = pick(e);
   if (!hit) return;
@@ -816,10 +858,15 @@ renderer.domElement.addEventListener("dblclick", (e) => {          // make that 
 function resize() {
   const w = host.clientWidth, h = host.clientHeight;
   renderer.setSize(w, h); labelRenderer.setSize(w, h);
-  camera.aspect = w / h; camera.updateProjectionMatrix();
+  camera.aspect = w / h;
+  // On phones the panel is a sheet over the lower part of the view: shift the picture up by half the sheet,
+  // so the model stays centered in the part that is still visible
+  const sheet = phone.matches && app.classList.contains("open") ? document.querySelector("aside").offsetHeight : 0;
+  if (sheet) camera.setViewOffset(w, h, 0, sheet / 2, w, h); else camera.clearViewOffset();
+  camera.updateProjectionMatrix();
   gRenderer.setSize(gCanvas.clientWidth, gCanvas.clientHeight, false);
 }
-new ResizeObserver(resize).observe(host); resize();
+new ResizeObserver(resize).observe(host); phone.addEventListener?.("change", resize); resize();
 const occRay = new THREE.Raycaster();
 function updateOcclusion() {
   const solid = solidMeshes();
