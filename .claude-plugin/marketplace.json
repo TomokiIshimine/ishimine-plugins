@@ -1,7 +1,7 @@
 {
   "name": "ishimine-plugins",
   "owner": {
-    "name": "Tomoki Ishimine (イシミネ)",
+    "name": "Tomoki Ishimine",
     "url": "https://github.com/TomokiIshimine"
   },
   "metadata": {
@@ -12,9 +12,9 @@
       "name": "print3d-modeler",
       "source": "./plugins/print3d-modeler",
       "description": "Design 3D models through conversation in Python (build123d), check them in a 3D viewer with independent printability and requirements reviews, and export print-ready STL / 3MF for FDM 3D printers.",
-      "version": "0.5.1",
+      "version": "0.5.2",
       "author": {
-        "name": "Tomoki Ishimine (イシミネ)"
+        "name": "Tomoki Ishimine"
       },
       "homepage": "https://github.com/TomokiIshimine/ishimine-plugins/tree/main/plugins/print3d-modeler",
       "license": "MIT",

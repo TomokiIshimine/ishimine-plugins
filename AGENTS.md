@@ -27,6 +27,7 @@ Users install with `/plugin marketplace add TomokiIshimine/ishimine-plugins` and
 
 - **Language.** Everything inside a plugin (skills, agents, templates, code, comments, runtime messages) is written in English. Claude talks to the user in the user's language at run time; the plugin text tells it to. READMEs exist in both English (`README.md`) and Japanese (`README.ja.md`).
 - **Versions.** A plugin's `version` in `plugins/<plugin>/.claude-plugin/plugin.json` and its entry in `.claude-plugin/marketplace.json` are always the same value. Any user-visible change to a plugin bumps it (semver).
+- **Anthropic directory rules.** Each plugin folder must stand on its own, because the directory installs only that folder and shows its README as the listing. Keep README images inside the plugin (`plugins/<plugin>/docs/images/`) and link them with Markdown image syntax, keep `author.name` and `displayName` in one writing system (Latin letters only, no Japanese), and keep the listing icon at `.claude-plugin/icon.png`.
 - **Paths inside plugins.** Skills and agents refer to plugin files through `${CLAUDE_PLUGIN_ROOT}`, never through absolute paths or paths relative to the user's working directory.
 - **Mechanical checks** (manifest schema, formatting, lint, `claude plugin validate`) belong in CI, not in review comments.
 

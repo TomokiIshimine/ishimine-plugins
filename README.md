@@ -10,7 +10,7 @@ A plugin marketplace for Claude Code and Cowork.
 
 Design 3D printable models through conversation. Tell Claude what you want to make; it asks about size and shape, builds the model in Python (build123d), has two independent reviewers check printability and your requirements, and shows it to you in a 3D viewer with part names and directions. When you are happy with it, you get 3MF / STL files in print orientation, ready for an FDM 3D printer.
 
-![The print3d-modeler 3D viewer showing a small house with part labels and directions](docs/images/print3d-modeler/en/viewer-overview.png)
+![The print3d-modeler 3D viewer showing a small house with part labels and directions](plugins/print3d-modeler/docs/images/en/viewer-overview.png)
 
 See the [plugin README](plugins/print3d-modeler/) for the workflow, viewer features and settings.
 
