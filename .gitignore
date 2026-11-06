@@ -1,0 +1,4 @@
+__pycache__/
+*.pyc
+.p3d-data/
+.p3d-work/
