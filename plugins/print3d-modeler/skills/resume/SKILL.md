@@ -1,31 +1,34 @@
 ---
 name: resume
 description: >
-  作りかけの 3D プリント用モデルの作業を、中断した工程から再開するときに使う。
-  「さっきのモデルの続き」「前に作ったスマホスタンドを直したい」「/print3d-modeler:resume」などで起動する。
-argument-hint: "[モデル名]"
+  Use when resuming work on an unfinished 3D printing model from the step where it stopped.
+  Triggered by requests like "continue the model from earlier", "I want to fix the phone stand I made before",
+  or "/print3d-modeler:resume".
+argument-hint: "[model name]"
 metadata:
   version: "0.1.0"
 ---
 
-# 作業の再開
+# Resume work
 
-対象: $ARGUMENTS
+Target: $ARGUMENTS
 
-1. 作業フォルダを探す。ユーザーが選んだフォルダ（無ければ出力フォルダ）の下の `print3d/*/spec.md` を Glob で探す。
-   - 引数があればモデル名（フォルダ名）か spec.md のタイトルで絞る。
-   - 候補が複数で決められなければ、更新日時の新しい順に最大 4 件を AskUserQuestion で選んでもらう。
-   - 見つからなければ、新規作成（`model` スキル）を提案する。
-2. Python 環境: `bash "${CLAUDE_PLUGIN_ROOT}/runtime/setup_env.sh"` を実行し、最後の行の JSON の `python`（PY）と `runtime`（RT）を使う（展開されない環境では `find / -name setup_env.sh -path "*print3d-modeler*" 2>/dev/null | head -1`）。
-3. 状態を読む: `spec.md`、`design.md`、`history.md`（最後の `## vN … 工程X` 行）、`reviews/` の最新周回、`out/final/` の有無。
-4. 再開位置を決める。
-   | 状態 | 再開する工程 |
+Talk to the user in their language. If the conversation language differs from the one in spec.md, follow the user (see "Language" in the `model` skill).
+
+1. Find the working folder. Glob for `print3d/*/spec.md` under the folder the user picked (or the output folder if none).
+   - If there is an argument, narrow down by model name (folder name) or the title in spec.md.
+   - If several candidates remain, let the user choose from up to 4, newest first, with AskUserQuestion.
+   - If none is found, suggest creating a new one (the `model` skill).
+2. Python environment: run `bash "${CLAUDE_PLUGIN_ROOT}/runtime/setup_env.sh"` and use `python` (PY) and `runtime` (RT) from the JSON on the last line (if the variable is not expanded, use `find / -name setup_env.sh -path "*print3d-modeler*" 2>/dev/null | head -1`).
+3. Read the state: `spec.md`, `design.md`, `history.md` (the last `## vN … step X` line), the latest round in `reviews/`, and whether `out/final/` exists.
+4. Decide where to resume.
+   | State | Resume at |
    |---|---|
-   | spec.md だけ | 工程 2（設計） |
-   | design.md まで、model.py なし | 工程 3（実装） |
-   | model.py はあるが parts.json / viewer.html が古い・無い | 工程 4（実行） |
-   | 最新の版にレビューが無い、または FAIL が残る | 工程 5（レビュー。周回番号は続きから。3 周の上限は版ごとに数え直さない） |
-   | レビュー PASS、ユーザー確認待ち | 工程 6（ビューアを作り直して再提示） |
-   | out/final がある | 完了。追加の修正か再出力かを聞く |
-5. ユーザーに「どこまで進んでいて、次に何をするか」を 2〜3 行で伝え、`model` スキルの該当工程の手順（`${CLAUDE_PLUGIN_ROOT}/skills/model/SKILL.md` と `references/workflow.md`）に沿って続ける。
-6. セッションが変わると Python のパスが変わることがある。model.py は `P3D_RUNTIME` 環境変数で runtime を受け取るので、毎回 `P3D_RUNTIME=RT PY model.py` で実行する。
+   | Only spec.md | Step 2 (design) |
+   | Up to design.md, no model.py | Step 3 (implement) |
+   | model.py exists but parts.json / viewer.html is missing or stale | Step 4 (run) |
+   | No review for the latest version, or FAILs remain | Step 5 (review; continue the round numbering; the 3-round limit is not reset per version) |
+   | Reviews PASS, waiting for the user check | Step 6 (rebuild the viewer and show it again) |
+   | out/final exists | Done. Ask whether to make more changes or export again |
+5. Tell the user in 2–3 lines how far it got and what comes next, then continue with the matching step of the `model` skill (`${CLAUDE_PLUGIN_ROOT}/skills/model/SKILL.md` and `references/workflow.md`).
+6. Python paths can change between sessions. model.py receives the runtime through the `P3D_RUNTIME` environment variable, so always run it as `P3D_RUNTIME=RT PY model.py`.

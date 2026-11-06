@@ -1,21 +1,23 @@
-# 設計: <モデルの日本語名>
+# Design: <model name>
 
-## 部位
-| 表示 | id | 部位名 | 主要寸法 | 印刷グループ | 要件 |
+<!-- Write this file in the user's language (translate the headings too). Keep ids and requirement IDs as they are. -->
+
+## Parts
+| Display | id | Part name | Key dimensions | Print group | Requirements |
 |---|---|---|---|---|---|
-| P1 | base | 台座 | 80×90×6 | main | R1 |
+| P1 | base | Base | 80×90×6 | main | R1 |
 
-## 場所ラベル（穴・溝など）
-| id | 名前 | 位置 | 要件 |
+## Location labels (holes, grooves, etc.)
+| id | Name | Position | Requirements |
 |---|---|---|---|
 
-## 寸法の決め方
-- <例: 背もたれと前ストッパーの間隔 = スマホ厚 12mm + 余裕 2mm>
+## How the dimensions were chosen
+- <e.g. gap between backrest and front lip = phone thickness 12 mm + 2 mm margin>
 
-## 印刷の向き
-- 採用: <例: 台座の底面を下（回転なし）>
-- 理由: <ベッドに広く接する／サポート不要／積層方向と力の向き>
-- 他の候補: <例: 背面を下 → 強度は上がるがサポートが必要>
+## Print orientation
+- Chosen: <e.g. bottom of the base down (no rotation)>
+- Reason: <large bed contact / no support needed / layer direction vs. load direction>
+- Other candidates: <e.g. back face down → stronger, but needs support>
 
-## 未決・ユーザーに確認すること
+## Open points to confirm with the user
 - 

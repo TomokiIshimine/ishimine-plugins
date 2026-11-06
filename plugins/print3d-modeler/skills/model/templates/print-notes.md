@@ -1,26 +1,28 @@
-# 印刷メモ: <モデルの日本語名>
+# Print notes: <model name>
 
-## ファイル
-- 3MF: `out/final/<model>.3mf`（スライサーにそのまま読み込めます。向きは設定済み）
+<!-- Write this file in the user's language (translate the headings too). -->
+
+## Files
+- 3MF: `out/final/<model>.3mf` (load it straight into your slicer; orientation is already set)
 - STL: `out/final/<model>_<group>.stl`
 
-## 印刷の向き
-- <部品ごとに: どの面を下にするか>
+## Print orientation
+- <per piece: which face goes down>
 
-## 推奨設定（<プリンタ>・ノズル <0.4>mm・<PLA>）
-| 項目 | 推奨 |
+## Recommended settings (<printer>, <0.4> mm nozzle, <PLA>)
+| Setting | Recommendation |
 |---|---|
-| 積層ピッチ | 0.2 mm |
-| 壁（ペリメータ） | 3 周 |
-| インフィル | 15〜20%（力がかかるなら 30〜40%） |
-| サポート | 不要 ／ 必要（場所: …） |
-| ベッド密着 | ブリム不要 ／ ブリム 5mm 推奨（理由: 接地面が小さい） |
+| Layer height | 0.2 mm |
+| Walls (perimeters) | 3 |
+| Infill | 15–20% (30–40% if it bears load) |
+| Supports | Not needed / Needed (where: …) |
+| Bed adhesion | No brim needed / 5 mm brim recommended (reason: small contact area) |
 
-## 目安
-- 外形: … mm ／ 体積: … cm³ ／ 重さの上限（中身 100%）: … g
+## Estimates
+- Size: … mm / Volume: … cm³ / Weight upper bound (100% infill): … g
 
-## 注意点（レビューの警告）
+## Cautions (review warnings)
 - 
 
-## 組み立て（複数部品の場合）
+## Assembly (multiple pieces)
 - 

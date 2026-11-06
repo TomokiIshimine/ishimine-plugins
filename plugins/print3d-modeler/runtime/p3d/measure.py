@@ -1,10 +1,11 @@
-"""寸法の実測ツール（要望充足レビューやメインの自己確認用）。座標は設計姿勢・mm。
+"""Dimension measuring tool (for the requirements review and the main agent's self-check).
+Coordinates are in the design pose, in mm.
 
-    python -m p3d.measure <モデルフォルダ>                      # 全部位の外形・体積・位置
-    python -m p3d.measure <モデルフォルダ> --part handle        # 1 部位の詳細
-    python -m p3d.measure <モデルフォルダ> --section z=30       # 高さ 30mm の断面の外形寸法（部位ごと）
-    python -m p3d.measure <モデルフォルダ> --distance a b       # 部位 a と b の最短距離
-    python -m p3d.measure <モデルフォルダ> --ray x,y,z dx,dy,dz # 点から方向へ飛ばしたレイが通る厚み（穴・溝の深さ確認）
+    python -m p3d.measure <model folder>                      # bounding box, volume and position of every part
+    python -m p3d.measure <model folder> --part handle        # details for one part
+    python -m p3d.measure <model folder> --section z=30       # outline of the cross-section at Z=30 mm (per part)
+    python -m p3d.measure <model folder> --distance a b       # shortest distance between parts a and b
+    python -m p3d.measure <model folder> --ray x,y,z dx,dy,dz # solid spans a ray crosses from a point (hole/groove depth)
 """
 from __future__ import annotations
 

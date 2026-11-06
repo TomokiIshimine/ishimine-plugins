@@ -1,32 +1,32 @@
-# ヒアリングの質問例
+# Sample hearing questions
 
-AskUserQuestion は 1 回に論点 1〜3 個。選択肢には「よく分からない（おまかせ）」相当を入れ、その場合の既定値を説明に書く。
-すでに分かっていることは聞かない。
+AskUserQuestion takes 1–3 topics at a time. Include an option like "Not sure (leave it to you)" and say in its description which default you will use.
+Do not ask about anything you already know. Ask in the user's language.
 
-## 用途
-- 何に使いますか？ どこに置きますか？（机の上 / 壁に掛ける / 引き出しの中 / 屋外）
-- 何かに取り付ける・差し込む・載せるものですか？ → その相手の寸法を測ってもらう（例:「スマホの厚さ（ケース込み）を mm で教えてください」）
-- 力がかかりますか？（重い物を載せる、引っ張る、ねじで締める）→ 強度と積層方向に影響
+## Purpose
+- What will it be used for? Where will it go? (on a desk / hung on a wall / inside a drawer / outdoors)
+- Does it attach to, slot into, or hold something? → ask the user to measure that object (for example: "Please tell me the thickness of your phone, including the case, in mm")
+- Will it bear force? (holding something heavy, being pulled, screws being tightened) → affects strength and layer direction
 
-## 大きさ
-- だいたいの外形（幅×奥行×高さ）。分からなければ身近な物で（「マグカップくらい」「手のひらサイズ」）
-- 必ず守りたい寸法はどれですか？（内寸か外寸か、許容差 ±0.5mm でよいか）
+## Size
+- Rough overall size (width × depth × height). If the user does not know, compare with familiar objects ("about the size of a mug", "palm-sized")
+- Which dimensions must be kept exactly? (inner or outer dimension, is a ±0.5 mm tolerance fine?)
 
-## 形・見た目
-- 角は丸めますか？（丸め R2 程度 / 角ばったまま / おまかせ）
-- 文字やロゴを入れますか？（入れるなら文字の高さ 5mm 以上・線の太さ 0.8mm 以上を推奨）
-- 必要な穴・溝・切り欠き（ケーブルを通す、ねじ穴、水抜き）
+## Shape and look
+- Round the corners? (about R2 / keep them sharp / leave it to you)
+- Any text or logo? (if so, recommend text at least 5 mm tall with strokes at least 0.8 mm wide)
+- Holes, grooves or cutouts needed (cable pass-through, screw holes, drainage)
 
-## 動き・組み合わせ
-- 1 つの部品で印刷しますか？ それとも複数部品を組み立てますか？
-- ふた・はめ込み・ヒンジ・ねじ止めの有無。市販のねじ（M3 など）や磁石を使うならその型番・寸法
+## Movement and assembly
+- Print as one piece, or assemble several pieces?
+- Lids, snap fits, hinges or screws? If using off-the-shelf screws (M3 and so on) or magnets, get their part numbers and dimensions
 
-## 印刷環境
-- プリンタの機種（例: Bambu Lab A1 mini、Prusa MK4、Ender-3 V3 SE）→ 造形範囲をプリセットから設定。分からなければ造形範囲を mm で
-- ノズル径（ふつうは 0.4mm）
-- 材料（PLA / PETG / ABS / TPU）。屋外・車内・熱いものなら PETG/ASA を提案
+## Printing setup
+- Printer model (for example Bambu Lab A1 mini, Prusa MK4, Ender-3 V3 SE) → set the build volume from a preset. If unknown, ask for the build volume in mm
+- Nozzle size (usually 0.4 mm)
+- Material (PLA / PETG / ABS / TPU). Suggest PETG/ASA for outdoors, in a car, or near heat
 
-## 聞き方のコツ
-- 専門用語は言い換える: オーバーハング＝「下側が宙に浮く張り出し。支え（サポート材）が必要になる」、ブリッジ＝「両端だけ支えのある橋のような水平部分」、積層痕＝「印刷の層の筋」。
-- 選択肢にはそれぞれの影響（強度、見た目、印刷時間、サポートの要否）を短く添える。
-- 数値は「だいたいで構いません」と添えると答えやすい。後でビューアで確かめられることも伝える。
+## Tips
+- Rephrase technical terms: overhang = "a part that sticks out with nothing underneath; it needs support material", bridge = "a horizontal span supported only at both ends, like a bridge", layer lines = "the visible lines between printed layers".
+- Briefly note the effect of each option (strength, look, print time, whether supports are needed).
+- For numbers, adding "a rough value is fine" makes them easier to answer. Mention that the user can check them later in the viewer.
