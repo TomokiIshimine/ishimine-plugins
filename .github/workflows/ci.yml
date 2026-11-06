@@ -1,10 +1,15 @@
 name: CI
 
+# Each job runs only when the change touches what it checks (see .github/scripts/changed_areas.py).
+# Manual runs, the weekly schedule, and changes to the CI itself run everything. The schedule
+# catches breakage from new releases of the runtime's unpinned dependencies (build123d, trimesh, ...).
 on:
   push:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  schedule:
+    - cron: "0 21 * * 0"   # Mondays 06:00 JST
 
 permissions:
   contents: read
@@ -14,8 +19,45 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Select checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      manifests: ${{ steps.areas.outputs.manifests }}
+      python_lint: ${{ steps.areas.outputs.python_lint }}
+      shell_lint: ${{ steps.areas.outputs.shell_lint }}
+      print3d_viewer: ${{ steps.areas.outputs.print3d_viewer }}
+      smoke_pythons: ${{ steps.areas.outputs.smoke_pythons }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: List changed files and pick the checks
+        id: areas
+        env:
+          EVENT: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PUSH_BEFORE: ${{ github.event.before }}
+        run: |
+          case "$EVENT" in
+            pull_request) base="$PR_BASE" ;;
+            push) base="$PUSH_BEFORE" ;;
+            *) base="" ;;
+          esac
+          if [ -n "$base" ] && git cat-file -e "${base}^{commit}" 2>/dev/null; then
+            echo "Changed files since ${base}:"
+            git diff --name-only "$base" HEAD | tee changed.txt
+            python3 .github/scripts/changed_areas.py < changed.txt | tee -a "$GITHUB_OUTPUT"
+          else
+            echo "No base commit to compare with: running every check"
+            python3 .github/scripts/changed_areas.py --all | tee -a "$GITHUB_OUTPUT"
+          fi
+
   manifests:
     name: Validate marketplace and plugins
+    needs: changes
+    if: needs.changes.outputs.manifests == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -42,32 +84,40 @@ jobs:
 
   lint:
     name: Lint
+    needs: changes
+    if: needs.changes.outputs.python_lint == 'true' || needs.changes.outputs.shell_lint == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
+        if: needs.changes.outputs.python_lint == 'true'
         with:
           python-version: "3.13"
       - name: ruff
+        if: needs.changes.outputs.python_lint == 'true'
         run: |
           pip install ruff==0.16.9
           ruff check --output-format=github .
       - name: shellcheck
+        if: needs.changes.outputs.shell_lint == 'true'
         run: shellcheck plugins/*/runtime/*.sh .github/scripts/*.sh
 
   print3d-smoke:
     name: print3d-modeler end to end (Python ${{ matrix.python }})
+    needs: changes
+    if: needs.changes.outputs.smoke_pythons != '[]'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
-        # Oldest version setup_env.sh accepts, and the newest one.
-        python: ["3.10", "3.13"]
+        # 3.10 (oldest version setup_env.sh accepts) only when Python code or dependencies change.
+        python: ${{ fromJSON(needs.changes.outputs.smoke_pythons) }}
     env:
       CLAUDE_PLUGIN_DATA: ${{ github.workspace }}/.p3d-data
       WORK: ${{ github.workspace }}/.p3d-work
+      CHECK_VIEWER: ${{ matrix.python == '3.13' && needs.changes.outputs.print3d_viewer == 'true' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -87,12 +137,12 @@ jobs:
       - name: Build the sample model and run every p3d CLI
         run: .github/scripts/smoke_print3d.sh "${{ steps.setup.outputs.python }}" "$WORK"
       - name: Install headless Chromium
-        if: matrix.python == '3.13'
+        if: env.CHECK_VIEWER == 'true'
         run: |
           "${{ steps.setup.outputs.python }}" -m pip install -q playwright==1.63.0
           "${{ steps.setup.outputs.python }}" -m playwright install --with-deps chromium
       - name: Open the generated viewers in Chromium
-        if: matrix.python == '3.13'
+        if: env.CHECK_VIEWER == 'true'
         run: >-
           "${{ steps.setup.outputs.python }}" .github/scripts/check_viewer.py
           "$WORK/phone-stand/viewer.ja.html" ja
@@ -109,3 +159,20 @@ jobs:
             ${{ env.WORK }}/phone-stand/out/final/
           if-no-files-found: ignore
           retention-days: 14
+
+  # One stable check to require in branch protection: passes when every selected job passed
+  # (skipped jobs count as passed) and fails if any of them failed or was cancelled.
+  result:
+    name: CI result
+    needs: [changes, manifests, lint, print3d-smoke]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check the selected jobs
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          bad="$(echo "$RESULTS" | jq '[.[] | select(.result != "success" and .result != "skipped")] | length')"
+          if [ "$bad" != "0" ]; then echo "::error::${bad} selected job(s) did not pass"; exit 1; fi
