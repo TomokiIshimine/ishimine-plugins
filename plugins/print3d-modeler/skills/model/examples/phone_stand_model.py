@@ -12,11 +12,14 @@ from build123d import Align, Box, Plane, Polygon, Pos, Rot, extrude  # noqa: E40
 from p3d import LabeledModel  # noqa: E402
 
 # ---- Parameters (values changed during the conversation; requirement IDs in comments) ----
-BASE_W, BASE_D, BASE_T = 80.0, 90.0, 6.0     # base width, depth, thickness       R1
+BASE_W, BASE_D, BASE_T = 80.0, 72.0, 6.0     # base width, depth, thickness       R1
+BASE_FRONT = -22.0                           # Y of the base's front edge
 BACK_W, BACK_H, BACK_T = 70.0, 100.0, 6.0    # backrest width, height, thickness  R2
 BACK_TILT = 20.0                             # backrest tilt backward [deg]       R3
 BACK_Y = 5.0                                 # Y of the backrest's front face at its root
-LIP_H, LIP_T, LIP_Y = 14.0, 6.0, -35.0       # front lip height, thickness, position  R4
+PHONE_GAP = 12.0                             # room for the phone (with case) between lip and backrest  R4
+LIP_H, LIP_T = 14.0, 6.0                     # front lip height, thickness        R4
+LIP_Y = BACK_Y - PHONE_GAP                   # Y of the lip's back face
 RIB_T = 8.0                                  # support rib thickness
 SLOT_W = 16.0                                # cable slot width                   R5
 EMBED = 1.0                                  # overlap between parts (so they fuse reliably)
@@ -25,7 +28,7 @@ MIN = (Align.CENTER, Align.MIN, Align.MIN)
 
 m = LabeledModel("phone-stand", title="Phone stand", lang="en")
 
-base = Box(BASE_W, BASE_D, BASE_T, align=(Align.CENTER, Align.CENTER, Align.MIN))
+base = Pos(0, BASE_FRONT, 0) * Box(BASE_W, BASE_D, BASE_T, align=MIN)
 m.add_part("base", "Base", base, description="Plate that sits on the bed",
            key_dims={"width": BASE_W, "depth": BASE_D, "thickness": BASE_T}, requirements=["R1"])
 
@@ -36,11 +39,11 @@ m.add_part("backrest", "Backrest", back, description="Plate that supports the ba
 
 lip = Pos(0, LIP_Y - LIP_T, BASE_T - EMBED) * Box(BACK_W, LIP_T, LIP_H + EMBED, align=MIN)
 m.add_part("front_lip", "Front lip", lip, description="Stops the bottom edge of the phone from sliding",
-           key_dims={"height": LIP_H}, requirements=["R4"])
+           key_dims={"height": LIP_H, "gap to backrest": PHONE_GAP}, requirements=["R4"])
 
 t = math.tan(math.radians(BACK_TILT))
 rear0 = BACK_Y + BACK_T / math.cos(math.radians(BACK_TILT))
-tri = Polygon((rear0 - 2, BASE_T - EMBED), (BASE_D / 2 - 2, BASE_T - EMBED),
+tri = Polygon((rear0 - 2, BASE_T - EMBED), (BASE_FRONT + BASE_D - 2, BASE_T - EMBED),
               (rear0 - 2 + 55 * t, BASE_T + 55), align=None)
 rib = extrude(Plane.YZ * tri, amount=RIB_T / 2, both=True)
 m.add_part("rib", "Support rib", rib, description="Triangular brace behind the backrest")
