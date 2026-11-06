@@ -26,7 +26,7 @@ Write everything the user reads in the user's language (see "Language" in SKILL.
 
 ## Step 3. Implement → model.py
 
-- Copy `templates/model_template.py` and fill it in. See `examples/phone_stand_model.py` for a sample.
+- Copy `templates/model_template.py` and fill it in. See `examples/phone_stand_model.py` for a simple sample and `examples/small_house_model.py` for a detailed one (printable details without supports).
 - Put parameters (dimensions) as constants at the top of the file, with requirement IDs in comments.
 - Set `lang` in `LabeledModel(...)` to the conversation language (`"ja"` or `"en"`).
 - Overlap parts by 0.5–1 mm so they fuse reliably (the `EMBED` constant).
