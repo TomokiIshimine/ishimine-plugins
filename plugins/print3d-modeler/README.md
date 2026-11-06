@@ -51,7 +51,9 @@ It creates `print3d/<model-name>/` under the folder you choose and keeps everyth
 
 ## Language
 
-The conversation follows the language you write in. The skill instructions and some viewer labels are currently written in Japanese.
+The plugin itself (skills, agents, templates, runtime messages) is written in English, but Claude talks to you in the language you write in.
+Part names, the print notes and other files you read are written in that language too.
+The 3D viewer UI is available in **English and Japanese**. Claude picks the one that matches your conversation when it builds the viewer (`LabeledModel(..., lang="en"|"ja")`, or `python -m p3d.viewer <dir> --lang en|ja`); if not set, it switches to Japanese when the part names are Japanese.
 
 ## Layout
 

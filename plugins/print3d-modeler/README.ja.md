@@ -39,6 +39,12 @@ Claude デスクトップアプリの Cowork で動かす前提で作ってい�
 - ビューアは three.js を埋め込んだ 1 ファイルの HTML です。アーティファクトとして表示でき、ブラウザで開けばオフラインでも動きます。
 - three.js を更新するときは `runtime/viewer/vendor/three-bundle.entry.js` を esbuild で `--bundle --minify --format=iife` して `three-bundle.js` を作り直します。
 
+## 言語
+
+プラグイン本体（スキル・エージェント・テンプレート・ランタイムのメッセージ）は英語で書かれていますが、Claude はあなたが書いた言語で会話します。
+部位名や印刷メモなど、ユーザーが読むものもその言語で作ります。
+3D ビューアの表示は **日本語と英語** に対応しています。Claude が会話の言語に合わせて、ビューアを作るときに選びます（`LabeledModel(..., lang="ja"|"en")` または `python -m p3d.viewer <フォルダ> --lang ja|en`）。指定が無い場合は、部位名が日本語なら日本語表示になります。
+
 ## 作業フォルダ
 
 選んだフォルダの下に `print3d/<モデル名>/` を作り、要件（spec.md）・設計（design.md）・コード（model.py）・ビューア（viewer.html）・レビュー結果・最終ファイル（out/final/）をすべて残します。セッションが切れても `resume` で続きから再開できます。

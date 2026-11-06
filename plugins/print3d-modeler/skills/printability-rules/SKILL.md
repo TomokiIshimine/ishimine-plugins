@@ -1,52 +1,53 @@
 ---
 name: printability-rules
 description: >
-  FDM 3D プリンタで印刷できるかの判定基準と、自動計測（p3d.analyze）の結果の読み方。
-  印刷可能性をレビューするとき、肉厚・オーバーハング・ブリッジ・接地・造形範囲・はめ合いの基準値が必要なときに参照する。
+  Criteria for whether a model can be printed on an FDM 3D printer, and how to read the automatic measurements (p3d.analyze).
+  Refer to it when reviewing printability, or when you need threshold values for wall thickness, overhangs, bridges,
+  bed contact, build volume or fit clearance.
 user-invocable: false
 metadata:
   version: "0.1.0"
 ---
 
-# 印刷可能性の判定基準（FDM）
+# Printability criteria (FDM)
 
-既定値はノズル 0.4mm・PLA。`printer.json`（または spec.md の印刷環境）に指定があればそちらを優先する。
-数値はすべて `p3d.analyze` の `thresholds` に出るので、それを正とする。
+Defaults assume a 0.4 mm nozzle and PLA. Values in `printer.json` (or the print environment in spec.md) take priority.
+Every number appears in `thresholds` in the `p3d.analyze` output; treat that as authoritative.
 
-## 判定項目
+## Checks
 
-| 項目 | 基準（既定値） | 重大度 | analyze の check 名 |
+| Check | Criterion (default) | Severity | analyze check name |
 |---|---|---|---|
-| メッシュが閉じている（水密・多様体） | 穴・裏返り・自己交差なし | critical | `watertight` |
-| 1 回で印刷する部品が 1 つにつながっている | `bodies == 1`（group ごと） | critical | `bodies` |
-| 造形範囲に収まる | printer の `build_volume_mm` 以内（Z 回転 90° も可） | critical | `build_volume` |
-| ベッドに接する平らな面がある | 接地面積 > 0 | critical | `bed_contact` |
-| 接地の安定 | 接地面積 ≥ 50mm² かつ重心が接地面の内側 | major | `bed_contact` |
-| 最小肉厚 | ノズル径 × 2（0.8mm）以上 | major | `wall_thickness` |
-| 最小の細部（ピン・文字の線） | ノズル径（0.4mm）以上 | major（肉厚と同時に出る） | `wall_thickness` |
-| はめ合いのすき間 | 片側 0.2〜0.4mm、重なり（干渉）なし | major | `clearance` |
-| オーバーハング | 垂直から 45° 以内。超える面はサポート要 | warning | `overhang` |
-| ブリッジ | 下向き水平面の短辺 10mm 以内ならサポートなしで可 | warning（超えたら） | `bridge` |
-| 印刷の向き | 他の向きのほうが明らかにサポートが少ないなら提案 | warning | `orientation` |
+| Mesh is closed (watertight, manifold) | No holes, flipped faces or self-intersections | critical | `watertight` |
+| A piece printed in one go is a single connected body | `bodies == 1` (per group) | critical | `bodies` |
+| Fits the build volume | Within the printer's `build_volume_mm` (a 90° Z rotation is allowed) | critical | `build_volume` |
+| Has a flat face on the bed | Contact area > 0 | critical | `bed_contact` |
+| Stable on the bed | Contact area ≥ 50 mm² and center of mass inside the contact area | major | `bed_contact` |
+| Minimum wall thickness | Nozzle × 2 (0.8 mm) or more | major | `wall_thickness` |
+| Smallest detail (pins, text strokes) | Nozzle size (0.4 mm) or more | major (reported with wall thickness) | `wall_thickness` |
+| Fit clearance | 0.2–0.4 mm per side, no overlap (interference) | major | `clearance` |
+| Overhang | Within 45° of vertical. Steeper faces need support | warning | `overhang` |
+| Bridge | Downward horizontal faces with a short side of 10 mm or less print without support | warning (when exceeded) | `bridge` |
+| Print orientation | Suggest another orientation if it clearly needs less support | warning | `orientation` |
 
-**判定:** critical か major が 1 件でもあれば FAIL。warning だけなら PASS（警告は印刷メモに載せる）。
+**Verdict:** FAIL if there is even one critical or major finding. PASS if there are only warnings (warnings go into the print notes).
 
-## 自動計測の読み方と注意
+## Reading the measurements, and caveats
 
-- 位置（`location` `center`）は設計姿勢の座標、`facing` / `direction` は設計姿勢の方向ラベル。
-- `overhang_regions` で `flat: true` かつ `bridge_span_mm ≤ max_bridge_mm` のものはブリッジとして刷れる見込み（`bridges` に入る）。ただし **片持ち（片側しか支えがない）水平面はブリッジではない**。形状を見て片持ちならオーバーハングとして扱う。
-- 肉厚は面上のランダムな点から内側へレイを飛ばして測る。鋭い角の近くでは実際より薄く出ることがある。`location` を `p3d.measure --ray` や `--section` で確かめ、角の誤検出なら除外してよい（除外した理由を evidence に書く）。
-- オーバーハングは部位を結合した後の形で判定し、さらに「真下 0.3mm 以内に別の面がある」「面のすぐ下が別の部位の中に入っている」面は、下の形に支えられているとして除外済み（例: 台座に載った前ストッパーの裏面）。
-- 接地面積は Z ≤ 0.2mm の下向き平面の合計。底がわずかに浮いている（Z=0 に面が無い）と 0 になる。
-- 自動計測で測れないもの（目視・コードで確認する）:
-  - 横向きの穴の上側（ティアドロップ化されているか、直径 8mm 超ならサポート要）
-  - 文字・刻印の大きさ（高さ 5mm、線 0.8mm、深さ 0.6mm 以上）
-  - 積層方向と力の向き（層の境目に引っ張りや曲げがかかると割れやすい → 向きの提案）
-  - 底面の縁の丸め（反り・剥がれの原因）、エレファントフット（最下層の広がり）がはめ合い部に影響するか
-  - 長く細い柱・高い薄板（印刷中に揺れて失敗しやすい。高さ / 太さ > 10 は警告）
+- Positions (`location`, `center`) are design-pose coordinates; `facing` / `direction` are design-pose direction labels (`"up (+Z)"` and so on).
+- Entries in `overhang_regions` with `flat: true` and `bridge_span_mm ≤ max_bridge_mm` are expected to print as bridges (they are listed in `bridges`). But **a cantilevered horizontal face (supported on one side only) is not a bridge**. Look at the shape; if it is cantilevered, treat it as an overhang.
+- Wall thickness is measured by casting rays inward from random surface points. Near sharp corners it can read thinner than it is. Check the `location` with `p3d.measure --ray` or `--section`; if it is a corner false positive you may exclude it (state why in the evidence).
+- Overhangs are judged on the fused shape, and faces with "another face within 0.3 mm directly below" or "the point just below the face inside another part" are already excluded as supported (for example the underside of a front lip sitting on the base).
+- Bed contact area is the total of downward flat faces at Z ≤ 0.2 mm. If the bottom floats even slightly (no face at Z=0), it is 0.
+- Things the measurements cannot catch (check by looking at the code and shape):
+  - The top of horizontal holes (teardrop shaped? support needed above Ø8 mm)
+  - Size of text and engravings (height 5 mm, stroke 0.8 mm, depth 0.6 mm or more)
+  - Layer direction vs. load direction (layers crack easily under tension or bending across them → suggest an orientation)
+  - Rounded edges on the bottom face (warping, detaching), and whether elephant's foot (first-layer spread) affects fitting parts
+  - Long thin columns and tall thin plates (wobble and fail while printing; warn when height / thickness > 10)
 
-## 指摘の書き方
+## How to write findings
 
-- `part` は parts.json の id、`direction` は `"上(+Z)"` などの方向ラベル。ユーザーにそのまま見せられる言葉で `issue` を書く。
-- `evidence` には計測値と出どころ（`analyze: min_wall=0.61mm @ (12.0, 4.5, 30.2)` など）。
-- `suggestion` は具体的な直し方（数値入り）。直すと要望に影響する場合はそう書く。
+- `part` is the id in parts.json; `direction` is a direction label such as `"up (+Z)"`. Write `issue` in words that can be shown to the user, in the language spec.md is written in.
+- `evidence` holds the measured value and its source (e.g. `analyze: min_wall=0.61mm @ (12.0, 4.5, 30.2)`).
+- `suggestion` is a concrete fix with numbers. Say so if the fix affects what the user asked for.

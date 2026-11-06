@@ -1,14 +1,14 @@
-"""プリンタ設定（造形範囲・ノズル径など）の読み込み。
+"""Load printer settings (build volume, nozzle size, and so on).
 
-探す順番:
-  1. <モデルフォルダ>/printer.json
-  2. <モデルフォルダの親（print3d/）>/printer.json
-  3. 既定値（220×220×250mm、ノズル 0.4mm、PLA）
+Lookup order:
+  1. <model folder>/printer.json
+  2. <parent of the model folder (print3d/)>/printer.json
+  3. Defaults (220×220×250 mm, 0.4 mm nozzle, PLA)
 
-printer.json の例:
-  {"preset": "bambu-a1-mini"}                      # プリセットをそのまま使う
-  {"preset": "ender3-v3-se", "nozzle_mm": 0.6}     # プリセット＋一部上書き
-  {"name": "自作機", "build_volume_mm": [200, 200, 180], "nozzle_mm": 0.4}
+printer.json examples:
+  {"preset": "bambu-a1-mini"}                      # use a preset as is
+  {"preset": "ender3-v3-se", "nozzle_mm": 0.6}     # preset with some overrides
+  {"name": "My custom printer", "build_volume_mm": [200, 200, 180], "nozzle_mm": 0.4}
 """
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ import json
 from pathlib import Path
 
 DEFAULT = {
-    "name": "汎用 FDM（既定値）",
+    "name": "Generic FDM (default)",
     "build_volume_mm": [220, 220, 250],
     "nozzle_mm": 0.4,
     "layer_height_mm": 0.2,
@@ -27,9 +27,9 @@ DEFAULT = {
     "min_bed_contact_mm2": 50,
 }
 
-# 造形範囲は各メーカーの公表値の目安。正確な値はユーザーの機種で確認する。
+# Build volumes are approximate manufacturer figures. Confirm exact values with the user's printer.
 PRESETS = {
-    "generic-220": {"name": "汎用 FDM 220×220×250", "build_volume_mm": [220, 220, 250]},
+    "generic-220": {"name": "Generic FDM 220×220×250", "build_volume_mm": [220, 220, 250]},
     "bambu-a1-mini": {"name": "Bambu Lab A1 mini", "build_volume_mm": [180, 180, 180]},
     "bambu-a1": {"name": "Bambu Lab A1", "build_volume_mm": [256, 256, 256]},
     "bambu-p1s": {"name": "Bambu Lab P1S / P1P", "build_volume_mm": [256, 256, 256]},
@@ -60,7 +60,7 @@ def resolve(cfg: dict | None) -> dict:
     preset = cfg.get("preset")
     if preset:
         if preset not in PRESETS:
-            raise ValueError(f"未知のプリセット: {preset}（候補: {', '.join(PRESETS)}）")
+            raise ValueError(f"Unknown preset: {preset} (choices: {', '.join(PRESETS)})")
         out.update(PRESETS[preset])
     out.update({k: v for k, v in cfg.items() if k != "preset"})
     out["preset"] = preset

@@ -1,11 +1,11 @@
-"""印刷用の最終ファイルを書き出す（印刷の向き・ベッドに接地済み）。
+"""Write the final print files (in print orientation, resting on the bed).
 
-    python -m p3d.export <モデルフォルダ>
+    python -m p3d.export <model folder>
 
-出力:
-  out/final/<model>.3mf           全部品をベッド上に並べた 3MF（部品ごとに別オブジェクト）
-  out/final/<model>_<group>.stl   部品ごとの STL
-標準出力: 印刷メモ（print-notes.md）を書くための事実を JSON で表示
+Outputs:
+  out/final/<model>.3mf           3MF with every piece laid out on the bed (one object per piece)
+  out/final/<model>_<group>.stl   one STL per piece
+Stdout: JSON with the facts needed to write the print notes (print-notes.md)
 """
 from __future__ import annotations
 
@@ -61,7 +61,8 @@ def export_dir(d: str | Path) -> dict:
                                                               "stl": [i["stl"] for i in info]},
         "printer": {k: printer[k] for k in ("name", "build_volume_mm", "nozzle_mm", "layer_height_mm", "material")},
         "groups": info, "analysis": an, "print_note": pj.get("print_note", ""),
-        "note": "solid_weight_g は中身 100% の上限値。実際はインフィル率で大きく減る（15〜20% なら概ね 3〜5 割）",
+        "note": "solid_weight_g is the upper bound at 100% infill. Actual weight drops a lot with infill "
+                "(roughly 30-50% of it at 15-20% infill)",
     }
 
 

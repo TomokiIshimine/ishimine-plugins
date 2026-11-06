@@ -1,4 +1,4 @@
-"""部位名付きモデル（LabeledModel）。model.py から使い、成果物一式を書き出す。"""
+"""Model with named parts (LabeledModel). Used from model.py; writes every output file."""
 from __future__ import annotations
 
 import json
@@ -12,7 +12,7 @@ import trimesh
 
 from .meshutil import boolean, place_on_bed, round_list, to_trimesh
 
-# 接地面の表示色（青）と紛れないよう、青系は使わない
+# No blues, so parts never get confused with the bed-contact highlight (blue)
 PALETTE = ["#F28E2B", "#59A14F", "#B07AA1", "#E15759", "#76B7B2",
            "#EDC948", "#9C755F", "#FF9DA7", "#8CD17D", "#BAB0AC"]
 ID_RE = re.compile(r"^[a-z][a-z0-9_]*$")
@@ -44,38 +44,40 @@ class Feature:
 @dataclass
 class Cut:
     shape: object
-    parts: list | None   # None = 全部位
+    parts: list | None   # None = every part
 
 
 class LabeledModel:
-    """部位（id・日本語ラベル・色・主要寸法・要件ID）付きのモデル。
+    """Model made of parts, each with an id, a display label, a color, key dimensions and requirement IDs.
 
-    - 部位 id は英小文字のスラッグ（例: base, handle_left）。ユーザーには label（日本語）を見せる。
-    - 形状は build123d の Part/Solid、manifold3d.Manifold、trimesh.Trimesh のどれでもよい。
-    - 設計姿勢（使うときの向き）で作る。印刷の向きは set_print_orientation で回転として持つ。
-    - 同じ print_group の部位は印刷時に 1 つに結合される。別々に印刷する部品は group を分ける。
+    - Part ids are lowercase slugs (e.g. base, handle_left). The user sees the label, written in the user's language.
+    - Shapes can be build123d Part/Solid, manifold3d.Manifold or trimesh.Trimesh.
+    - Build in the design pose (as used). The print orientation is kept as a rotation via set_print_orientation.
+    - Parts in the same print_group are fused into one piece for printing. Use separate groups for separate pieces.
+    - lang is the viewer's UI language ("en" or "ja"). None picks it from the labels (Japanese text -> "ja").
     """
 
-    def __init__(self, name: str, title: str | None = None):
+    def __init__(self, name: str, title: str | None = None, lang: str | None = None):
         if not ID_RE.match(name.replace("-", "_")):
-            raise ValueError("name は英小文字・数字・ハイフンのスラッグにしてください（例: pen-stand）")
+            raise ValueError("name must be a slug of lowercase letters, digits and hyphens (e.g. pen-stand)")
         self.name = name
         self.title = title or name
+        self.lang = lang
         self.parts: list[Part] = []
         self.features: list[Feature] = []
         self.cuts: list[Cut] = []
-        self.print_orientation: dict = {"rotation_deg": [0, 0, 0], "bed_face": "設計姿勢の底面（Z=0）"}
+        self.print_orientation: dict = {"rotation_deg": [0, 0, 0], "bed_face": "bottom face in the design pose (Z=0)"}
         self.group_orientation: dict[str, dict] = {}
         self.object_labels: dict[str, str] = {}
         self.print_note = ""
 
-    # ------------------------------------------------------------------ 定義
+    # ------------------------------------------------------------------ definition
     def add_part(self, id, label, shape, color=None, description="", key_dims=None,
                  requirements=None, anchor=None, print_group="main"):
         if not ID_RE.match(id):
-            raise ValueError(f"部位 id は英小文字のスラッグにしてください: {id!r}")
+            raise ValueError(f"Part id must be a lowercase slug: {id!r}")
         if any(p.id == id for p in self.parts):
-            raise ValueError(f"部位 id が重複しています: {id}")
+            raise ValueError(f"Duplicate part id: {id}")
         color = color or PALETTE[len(self.parts) % len(PALETTE)]
         self.parts.append(Part(id, label, shape, color, description, dict(key_dims or {}),
                                list(requirements or []), list(anchor) if anchor is not None else None,
@@ -83,18 +85,18 @@ class LabeledModel:
         return self
 
     def add_feature(self, id, label, position, description="", requirements=None):
-        """穴・溝など、独立した部位ではない「場所」にラベルを付ける。"""
+        """Label a location that is not a separate part, such as a hole or a groove."""
         self.features.append(Feature(id, label, [float(v) for v in position], description,
                                      list(requirements or [])))
         return self
 
     def add_cut(self, shape, parts=None):
-        """全部位（または parts で指定した部位）から削り取る形状。"""
+        """Shape to subtract from every part (or only from the parts listed in parts)."""
         self.cuts.append(Cut(shape, list(parts) if parts else None))
         return self
 
     def set_print_orientation(self, rotation_deg=(0, 0, 0), bed_face="", group=None):
-        """印刷の向き。設計姿勢を X→Y→Z の順に何度回すか（度）。group 指定でその部品だけ。"""
+        """Print orientation: degrees to rotate the design pose about X, then Y, then Z. Pass group for one piece only."""
         cfg = {"rotation_deg": [float(a) for a in rotation_deg], "bed_face": bed_face}
         if group is None:
             self.print_orientation = cfg
@@ -103,11 +105,11 @@ class LabeledModel:
         return self
 
     def set_object_label(self, group, label):
-        """オブジェクト（print_group）の表示名。ビューアのパーツ一覧で、パーツをこの名前の下にまとめる。"""
+        """Display name of an object (print_group). The viewer's part list nests the parts under this name."""
         self.object_labels[group] = label
         return self
 
-    # ------------------------------------------------------------------ 生成
+    # ------------------------------------------------------------------ build
     def _part_meshes(self) -> dict[str, trimesh.Trimesh]:
         cut_meshes = [(to_trimesh(c.shape), c.parts) for c in self.cuts]
         out = {}
@@ -117,7 +119,7 @@ class LabeledModel:
             if cuts:
                 r = boolean([m, *cuts], "difference")
                 if r is None:
-                    raise RuntimeError(f"部位 {p.id} の切り抜きに失敗しました（形状が閉じていない可能性）")
+                    raise RuntimeError(f"Cutting part {p.id} failed (the shape may not be closed)")
                 m = r
             out[p.id] = m
         return out
@@ -157,23 +159,23 @@ class LabeledModel:
             return False
 
     def build(self, where: str | Path) -> dict:
-        """成果物一式を書き出す。where は model.py のパス（__file__）か出力フォルダ。
+        """Write every output file. where is the path of model.py (__file__) or an output folder.
 
-        出力:
-          parts.json             部位定義（id/label/anchor/key_dims/requirements/寸法/印刷向き）
-          out/parts/<id>.stl     部位ごとのメッシュ（設計姿勢）
-          out/model.stl          全体（設計姿勢）
-          out/model.glb          ビューア・レビュー用（部位別ノード、Z-up、extras.label_ja）
-          out/model.step         build123d で作った場合のみ（CAD 編集用）
-          out/print/<group>.stl  印刷姿勢（ベッドに接地、group ごとに結合済み）
-          analysis.json          印刷可能性の自動計測結果
-          viewer.html            確認用 3D ビューア（オフラインで開ける）
+        Outputs:
+          parts.json             part definitions (id/label/anchor/key_dims/requirements/size/print orientation)
+          out/parts/<id>.stl     mesh per part (design pose)
+          out/model.stl          whole model (design pose)
+          out/model.glb          for the viewer and reviews (one node per part, Z-up, extras.label)
+          out/model.step         only when built with build123d (for CAD editing)
+          out/print/<group>.stl  print pose (resting on the bed, fused per group)
+          analysis.json          automatic printability measurements
+          viewer.html            3D viewer for checking the model (opens offline)
         """
         where = Path(where).resolve()
         d = where.parent if where.suffix == ".py" else where
         out = d / "out"
         if not self.parts:
-            raise ValueError("部位がありません。add_part で追加してください")
+            raise ValueError("No parts. Add some with add_part")
 
         for sub in ("parts", "print"):
             if (out / sub).exists():
@@ -183,7 +185,7 @@ class LabeledModel:
 
         meshes = self._part_meshes()
 
-        # ---- 設計姿勢の出力
+        # ---- design-pose outputs
         scene = trimesh.Scene()
         scene.metadata = {"up_axis": "Z", "units": "mm", "front_axis": "-Y", "model": self.name,
                           "title": self.title}
@@ -193,13 +195,13 @@ class LabeledModel:
             vm = m.copy()
             rgb = [int(p.color[i:i + 2], 16) for i in (1, 3, 5)]
             vm.visual.face_colors = [*rgb, 255]
-            vm.metadata = {"label_ja": p.label, "part_id": p.id}
+            vm.metadata = {"label": p.label, "part_id": p.id}
             scene.add_geometry(vm, node_name=p.id, geom_name=p.id)
         scene.export(out / "model.glb")
         trimesh.util.concatenate(list(meshes.values())).export(out / "model.stl")
         step_ok = self._export_step(out / "model.step")
 
-        # ---- 印刷姿勢（group ごとに結合 → 回転 → ベッドに並べる）
+        # ---- print pose (fuse per group -> rotate -> lay out on the bed)
         groups = self._groups()
         placed, widths = {}, {}
         for g, plist in groups.items():
@@ -222,12 +224,13 @@ class LabeledModel:
                              "matrix": [round_list(r, 6) for r in M], "parts": [p.id for p in groups[g]],
                              "size_mm": round_list(pm.extents, 2)}
 
-        # ---- parts.json（前版は out/parts.prev.json に残す：意図しない変更の検出用）
+        # ---- parts.json (the previous version is kept as out/parts.prev.json to detect unintended changes)
         if (d / "parts.json").exists():
             shutil.copy2(d / "parts.json", out / "parts.prev.json")
         parts_json = {
             "model": self.name,
             "title": self.title,
+            "lang": self.lang,
             "units": "mm",
             "up_axis": "+Z",
             "front_axis": "-Y",
@@ -252,7 +255,7 @@ class LabeledModel:
             })
         (d / "parts.json").write_text(json.dumps(parts_json, ensure_ascii=False, indent=2), encoding="utf-8")
 
-        # ---- 解析とビューア
+        # ---- analysis and viewer
         from .analyze import analyze_dir
         from .viewer import build_viewer
         analysis = analyze_dir(d)

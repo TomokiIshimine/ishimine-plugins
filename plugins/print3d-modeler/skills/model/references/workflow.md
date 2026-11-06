@@ -1,82 +1,85 @@
-# 工程ごとの詳しい手順
+# Detailed steps
 
-PY = setup_env.sh が表示した `python`、RT = `runtime`、DIR = モデルの作業フォルダ（絶対パス）。
+PY = `python` printed by setup_env.sh, RT = `runtime`, DIR = the model's working folder (absolute path).
+Write everything the user reads in the user's language (see "Language" in SKILL.md).
 
 ---
 
-## 工程 1. ヒアリング → spec.md / printer.json
+## Step 1. Hearing → spec.md / printer.json
 
-1. 最初のメッセージで分かったことを整理し、足りない点だけを聞く（質問例は `hearing.md`）。必ず押さえるのは次の 5 つ。
-   - 用途（何を、どこで、どう使うか。何かに載せる・差し込む・引っ掛けるなら相手の寸法）
-   - 大きさ（全体の外形、または相手物の実寸。ユーザーが測れる箇所を具体的に頼む）
-   - 形の特徴（必須の形・穴・溝・文字など、見た目の好み）
-   - 動き・組み合わせ（ふた、はめ合い、ヒンジ、ねじ。別々に印刷して組むか）
-   - 印刷環境（プリンタ機種 → 造形範囲、ノズル径、材料）
-2. プリンタ機種を聞いたら `print3d/printer.json` を書く（`printer` スキル参照）。不明なら既定値（220×220×250mm・ノズル 0.4mm・PLA）で進め、spec.md に「仮」と書く。
-3. `DIR/spec.md` を `templates/spec.md` から作る。要件は 1 行 1 件、ID は R1, R2…（**番号は振り直さない**。取り消しは ~~打ち消し~~ にして残す）。寸法要件には数値と許容差を書く。
+1. Sort out what the first message already tells you and ask only about the gaps (sample questions in `hearing.md`). Always cover these five:
+   - Purpose (what, where, how it is used; if it holds, slots into or hooks onto something, that object's dimensions)
+   - Size (overall size, or real measurements of the mating object; ask the user to measure specific spots)
+   - Shape (required shapes, holes, grooves, text; look and feel)
+   - Movement and assembly (lids, fits, hinges, screws; printed separately and assembled?)
+   - Printing setup (printer model → build volume, nozzle size, material)
+2. Once you know the printer model, write `print3d/printer.json` (see the `printer` skill). If unknown, go ahead with the defaults (220×220×250 mm, 0.4 mm nozzle, PLA) and mark them as provisional in spec.md.
+3. Create `DIR/spec.md` from `templates/spec.md`. One requirement per line with IDs R1, R2… (**never renumber**; strike cancelled requirements through with ~~strikethrough~~ and keep them). Give dimensional requirements a number and a tolerance.
 
-## 工程 2. 設計 → design.md
+## Step 2. Design → design.md
 
-1. 部位に分ける。ユーザーが指し示しやすい単位（「台座」「背もたれ」「取っ手」）にし、1 部位 = 1 ソリッドにする。小さな穴・溝は部位にせず `add_feature` の場所ラベルにする。
-2. 各部位の id（英小文字スラッグ）・label（日本語）・主要寸法・対応する要件 ID を決める。
-3. 印刷の向きの候補を 1〜2 個考える（ベッドに広い平面が付く／サポートが少ない／力のかかる方向に積層が割れない）。
-4. `DIR/design.md` に部位表・寸法・印刷の向きと理由を書く（`templates/design.md`）。
-5. 要点（部位の分け方、主要寸法、印刷の向き）を AskUserQuestion で確認する。ここで迷いが無ければ確認を 1 問にまとめてよい。
+1. Split the model into parts the user can easily point at ("base", "backrest", "handle"); one part = one solid. Small holes and grooves are not parts; label them as locations with `add_feature`.
+2. For each part decide the id (lowercase slug), label (in the user's language), key dimensions and related requirement IDs.
+3. Think of 1–2 candidate print orientations (a large flat face on the bed / little support / layers not split by the load direction).
+4. Write the part table, dimensions, and print orientation with reasons in `DIR/design.md` (`templates/design.md`).
+5. Confirm the key points (how the parts are split, main dimensions, print orientation) with AskUserQuestion. If nothing is uncertain, one combined question is fine.
 
-## 工程 3. 実装 → model.py
+## Step 3. Implement → model.py
 
-- `templates/model_template.py` をコピーして書く。見本は `examples/phone_stand_model.py`。
-- パラメータ（寸法）はファイル先頭に定数で置き、要件 ID をコメントで添える。
-- 部位同士は 0.5〜1mm 重ねて結合を確実にする（`EMBED` 定数）。
-- 別々に印刷する部品は `print_group` を分ける。はめ合いのすき間は片側 0.2〜0.4mm（printer.json の `clearance_mm`）。
-- 水平の穴（横向きの穴）は上側を 45° のとがり（ティアドロップ）にするとサポート不要になる。
-- 大きく平らな底面を作ると印刷が安定する。角の R（フィレット）は底面の縁には付けない（反りと剥がれの原因）。
-- build123d の書き方は `modeling-conventions/references/build123d-cheatsheet.md`。
+- Copy `templates/model_template.py` and fill it in. See `examples/phone_stand_model.py` for a sample.
+- Put parameters (dimensions) as constants at the top of the file, with requirement IDs in comments.
+- Set `lang` in `LabeledModel(...)` to the conversation language (`"ja"` or `"en"`).
+- Overlap parts by 0.5–1 mm so they fuse reliably (the `EMBED` constant).
+- Use separate `print_group`s for pieces printed separately. Fit clearance is 0.2–0.4 mm per side (`clearance_mm` in printer.json).
+- Horizontal holes (holes running sideways) need no support if the top is pointed at 45° (teardrop).
+- A large flat bottom makes printing stable. Do not fillet the edges of the bottom face (causes warping and detaching).
+- How to write build123d: `modeling-conventions/references/build123d-cheatsheet.md`.
 
-## 工程 4. 実行・自己チェック
+## Step 4. Run and self-check
 
 ```bash
 cd DIR && P3D_RUNTIME=RT PY model.py
 ```
 
-- 出力 JSON の `auto_check` と `critical_or_major` を見る。例外、水密でない、ボディが分かれている、造形範囲超えなど**明らかな失敗は自分で直して再実行**してから工程 5 へ進む。
-- 寸法の確認は `cd RT && PY -m p3d.measure DIR`（`--part id` `--section z=30` `--distance a b` `--ray x,y,z dx,dy,dz`）。
-- 1 回の実行は 30 秒以内が目安。重いときはフィレット・文字・細かい繰り返し形状を見直す。
+- Look at `auto_check` and `critical_or_major` in the output JSON. **Fix obvious failures yourself and run again** (exceptions, not watertight, split bodies, exceeding the build volume) before going to step 5.
+- Check dimensions with `cd RT && PY -m p3d.measure DIR` (`--part id` `--section z=30` `--distance a b` `--ray x,y,z dx,dy,dz`).
+- Aim for one run to take under 30 seconds. If it is slow, revisit fillets, text and fine repeated shapes.
 
-## 工程 5. レビュー
+## Step 5. Review
 
-- SKILL.md の「レビューの起動方法」どおり 2 体を並列に起動する。
-- 保存: `DIR/reviews/iter-N-printability.json`、`DIR/reviews/iter-N-requirements.json`（返ってきた JSON をそのまま。前後に文章があれば JSON 部分だけ）。
-- 判定: `verdict` が両方 PASS で通過。警告（warning）は `print-notes.md` に載せる。
-- FAIL の直し方: 指摘の `part` `direction` `suggestion` を見て model.py を直す → 工程 4 → 再レビュー（N+1）。直した内容は `history.md` に書く。
-- 3 周で残った指摘は、AskUserQuestion で「A: こう直す（影響…）／B: このまま印刷（リスク…）／C: 要件を変える」のように選んでもらう。
+- Launch the two reviewers in parallel as described in "Launching the reviews" in SKILL.md.
+- Save to `DIR/reviews/iter-N-printability.json` and `DIR/reviews/iter-N-requirements.json` (the returned JSON as is; if there is text around it, only the JSON part).
+- Verdict: passes when `verdict` is PASS for both. Put warnings in `print-notes.md`.
+- Fixing FAILs: use `part`, `direction` and `suggestion` in each finding to fix model.py → step 4 → review again (N+1). Record what you changed in `history.md`.
+- For findings still open after 3 rounds, let the user choose with AskUserQuestion, for example "A: fix it like this (impact …) / B: print as is (risk …) / C: change the requirement".
 
-## 工程 6. ユーザー確認
+## Step 6. User check
 
-### ビューアで確認してもらう
+### Checking in the viewer
 
-- ビューアは見るための道具に絞ってある（回転・拡大縮小・移動、パーツ名のホバー表示、パーツ/オブジェクトごとの表示切り替え、使うときの向き／印刷の向き、方向・部位ラベル・サポート面・接地面・1円玉の表示切り替え）。質問カード・レビュー指摘・自動計測の一覧は載せない。
-- 確かめたい論点（レビューの `questions_for_user`、設計で迷った点、印刷の向きの選択など）は、ビューアと同じメッセージで AskUserQuestion にして聞く。1 回 1〜3 個、部位ラベル（`P2 背もたれ`）と方向を添える。
-- 複数のオブジェクト（別々に印刷する部品）を作るときは `print_group` を分け、`m.set_object_label("lid", "フタ")` で表示名を付ける。ビューアのパーツ一覧がオブジェクトごとのネスト式チェックボックスになる。
+- The viewer is kept to a viewing tool (rotate, zoom, pan, part names on hover, show/hide per part or object, as used / print orientation, and toggles for directions, part labels, faces needing support, bed contact faces and a size-reference coin). It has no question cards, review findings or measurement lists.
+- Its UI language follows `lang` (English or Japanese). Make sure it matches the conversation; if not, fix `lang` in model.py, or run `cd RT && PY -m p3d.viewer DIR --lang <en|ja>`.
+- Ask the points you want to confirm (`questions_for_user` from the review, design choices you were unsure about, the choice of print orientation, and so on) with AskUserQuestion in the same message as the viewer. 1–3 at a time, with part labels (`P2 Backrest`) and directions.
+- When making several objects (pieces printed separately), use separate `print_group`s and name them with `m.set_object_label("lid", "Lid")`. The viewer's part list then nests checkboxes per object.
 
-### 指示の受け取り
+### Taking instructions
 
-- チャットでの指示（例: 「取っ手を上に 5mm 伸ばして」）も同じく扱う。部位ラベルと方向を parts.json と方向規約に対応づけ、`spec.md` の「ユーザー指摘の履歴」に追記し、要件（R 番号）として追加・修正する。
-- 指摘が設計の考え直しを要するなら工程 2、寸法の変更だけなら工程 3 に戻る。どちらの場合も工程 5 のレビューを通してから再度見せる。
+- Treat instructions in chat (for example "make the handle 5 mm longer upward") the same way. Map the part label and direction to parts.json and the direction convention, add the instruction to "User feedback history" in `spec.md`, and add or update a requirement (R number).
+- If the feedback needs the design rethought, go back to step 2; if it only changes dimensions, go back to step 3. Either way, pass the step 5 review before showing it again.
 
-## 工程 7. 出力
+## Step 7. Export
 
-`export` スキルの手順に従う。
+Follow the `export` skill.
 
 ---
 
-## history.md の書き方
+## How to write history.md
 
 ```markdown
-## v3 (2026-11-04 15:20) 工程6 → 工程3
-- ユーザー指摘: 背もたれを 20mm 高く (R2 を 100→120mm に変更)
+## v3 (2026-11-04 15:20) step 6 → step 3
+- User feedback: make the backrest 20 mm taller (R2 changed from 100 to 120 mm)
 - model.py: BACK_H 100→120
-- レビュー iter-4: printability PASS / requirements PASS
+- Review iter-4: printability PASS / requirements PASS
 ```
 
-先頭の `## vN … 工程X` 行を必ず書く（resume が最後の行から再開位置を判断する）。
+Always write the leading `## vN … step X` line, in English, whatever the conversation language (resume reads the last one to decide where to pick up). The bullet lines below it can be in the user's language.

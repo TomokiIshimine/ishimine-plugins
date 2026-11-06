@@ -1,12 +1,12 @@
-"""印刷可能性の自動計測（FDM 前提）。
+"""Automatic printability measurements (FDM).
 
-    python -m p3d.analyze <モデルフォルダ>            # analysis.json を書き出し、要約を表示
-    python -m p3d.analyze <モデルフォルダ> --stdout   # ファイルに書かず JSON を表示（レビュアー用）
+    python -m p3d.analyze <model folder>            # write analysis.json and print a summary
+    python -m p3d.analyze <model folder> --stdout   # print the JSON without writing a file (for reviewers)
 
-入力: parts.json, out/parts/<id>.stl（設計姿勢）, printer.json（任意）
-計測項目: 水密・ボディ数・造形範囲・最小肉厚・オーバーハング・ブリッジ・接地面積と重心・
-          部品間クリアランス・印刷向きの候補比較
-位置はすべて設計姿勢の座標（ユーザーに見せる座標）で報告する。
+Inputs: parts.json, out/parts/<id>.stl (design pose), printer.json (optional)
+Checks: watertightness, body count, build volume, minimum wall thickness, overhangs, bridges,
+        bed contact area and center of mass, clearance between pieces, alternative print orientations
+Every position is reported in design-pose coordinates (the coordinates the user sees).
 """
 from __future__ import annotations
 
@@ -23,24 +23,24 @@ import trimesh
 from .meshutil import boolean, direction_label, np_default, place_on_bed, round_list
 from .printer import load_printer
 
-BED_EPS = 0.2           # Z がこれ以下の下向き面は「ベッドに接している」とみなす
-MIN_REGION_MM2 = 2.0    # これより小さいオーバーハング領域は無視（丸みの端など）
+BED_EPS = 0.2           # downward faces at or below this Z count as touching the bed
+MIN_REGION_MM2 = 2.0    # ignore overhang regions smaller than this (edges of fillets, etc.)
 THICK_SAMPLES = 6000
 
 logging.getLogger("trimesh").setLevel(logging.ERROR)
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 AXIS_CANDIDATES = {
-    "そのまま": [0, 0, 0],
-    "上下逆さ": [180, 0, 0],
-    "前を下に": [-90, 0, 0],
-    "後ろを下に": [90, 0, 0],
-    "右を下に": [0, 90, 0],
-    "左を下に": [0, -90, 0],
+    "as designed": [0, 0, 0],
+    "upside down": [180, 0, 0],
+    "front face down": [-90, 0, 0],
+    "back face down": [90, 0, 0],
+    "right face down": [0, 90, 0],
+    "left face down": [0, -90, 0],
 }
 
 
-# --------------------------------------------------------------------- 読み込み
+# --------------------------------------------------------------------- loading
 def load_dir(d: Path):
     pj = json.loads((d / "parts.json").read_text(encoding="utf-8"))
     meshes = {}
@@ -56,15 +56,15 @@ def _fuse(ms):
     return r if r is not None else trimesh.util.concatenate(ms)
 
 
-# --------------------------------------------------------------------- 個別計測
-SUPPORT_GAP_MM = 0.3   # 下向き面のすぐ下（この距離以内）に別の形があれば、それに支えられているとみなす
+# --------------------------------------------------------------------- individual checks
+SUPPORT_GAP_MM = 0.3   # a downward face with other geometry within this distance below it counts as supported
 
 
 def supported_mask(mesh, faces, others=None, gap=SUPPORT_GAP_MM):
-    """下向き面 faces のうち、真下に物があって支えられている面。
+    """Which of the downward faces are supported by something directly below them.
 
-    - 真下 gap 以内に自分（結合後の形）の別の面がある（ほぼ接して積み重なっている）
-    - 面のすぐ下の点が、ほかの部位（others）の中に入っている（部位同士が重なって結合している）
+    - another face of the fused shape lies within gap directly below (stacked, almost touching)
+    - the point just below the face is inside another part in others (parts overlap and are fused)
     """
     faces = np.asarray(faces, dtype=int)
     out = np.zeros(len(faces), dtype=bool)
@@ -91,7 +91,7 @@ def supported_mask(mesh, faces, others=None, gap=SUPPORT_GAP_MM):
 
 
 def overhang_mask(mesh, limit_deg, others=None):
-    """垂直から limit_deg を超えて下を向いた面。ベッド接地面と、真下の形に支えられている面は除く。"""
+    """Faces pointing down more than limit_deg from vertical, excluding bed contact and faces supported from below."""
     nz = mesh.face_normals[:, 2]
     zc = mesh.triangles_center[:, 2]
     cand = (nz < -math.cos(math.radians(limit_deg))) & (zc > BED_EPS)
@@ -101,7 +101,7 @@ def overhang_mask(mesh, limit_deg, others=None):
 
 
 def group_overlays(pj, part_meshes, limit_deg):
-    """ビューア用：group ごとに、サポートが要る面と接地面の三角形（設計姿勢の座標）を返す。"""
+    """For the viewer: per group, the triangles needing support and touching the bed (design-pose coordinates)."""
     out = {}
     for g, gi in pj["print_orientation"]["groups"].items():
         M = np.array(gi["matrix"], dtype=float)
@@ -125,7 +125,7 @@ def bed_mask(mesh):
 
 
 def regions(mesh, mask):
-    """mask の面を辺でつながった塊に分ける。"""
+    """Split the masked faces into edge-connected regions."""
     idx = np.nonzero(mask)[0]
     if len(idx) == 0:
         return []
@@ -144,19 +144,19 @@ def regions(mesh, mask):
 
 
 def short_side(mesh, faces):
-    """面の塊を XY に投影したときの短辺（ブリッジ長の目安）。"""
+    """Short side of a face region projected onto XY (approximate bridge length)."""
     pts = mesh.triangles[faces].reshape(-1, 3)[:, :2]
     if len(pts) < 3:
         return 0.0
     try:
-        _, ext = trimesh.bounds.oriented_bounds_2D(pts)   # 最小面積の外接長方形
+        _, ext = trimesh.bounds.oriented_bounds_2D(pts)   # minimum-area bounding rectangle
     except Exception:
         ext = pts.max(0) - pts.min(0)
     return float(np.min(ext))
 
 
 def wall_thickness(mesh, n=THICK_SAMPLES, seed=0):
-    """面上の点から内側へレイを飛ばし、反対側の面までの距離＝局所肉厚を測る。"""
+    """Cast rays inward from surface points; the distance to the opposite face is the local wall thickness."""
     if len(mesh.faces) == 0:
         return np.zeros(0), np.zeros((0, 3))
     rng = np.random.default_rng(seed)
@@ -172,7 +172,7 @@ def wall_thickness(mesh, n=THICK_SAMPLES, seed=0):
         return np.zeros(0), np.zeros((0, 3))
     thick = np.full(len(pts), np.inf)
     dist = np.linalg.norm(locs - origins[ray_idx], axis=1)
-    # 自分自身の面に当たったものは除外
+    # ignore hits on the starting face itself
     ok = tri_idx != fidx[ray_idx]
     thick[ray_idx[ok]] = dist[ok]
     finite = np.isfinite(thick)
@@ -211,7 +211,7 @@ def fits(size, vol):
     return h <= Z and ((a <= X and b <= Y) or (a <= Y and b <= X))
 
 
-# --------------------------------------------------------------------- 本体
+# --------------------------------------------------------------------- main analysis
 def analyze_dir(d: str | Path, write: bool = True) -> dict:
     d = Path(d)
     pj, part_meshes = load_dir(d)
@@ -251,36 +251,36 @@ def analyze_dir(d: str | Path, write: bool = True) -> dict:
                 "watertight": bool(pm.is_watertight), "bodies": bodies,
                 "volume_mm3": round(float(pm.volume), 1) if pm.is_watertight else None}
 
-        # 1. 水密
+        # 1. watertight
         if not pm.is_watertight:
             bad = [p for p in pids if not part_meshes[p].is_watertight]
-            add("critical", f"[{g}] メッシュが閉じていない（穴・裏返り面がある）", part=bad[0] if bad else None,
-                evidence=f"is_watertight=False, 閉じていない部位={bad}", check="watertight",
-                suggestion="ソリッド同士を 0.5〜1mm 重ねて結合する／2D スケッチの輪郭が閉じているか確認する")
-        # 2. ボディ数
+            add("critical", f"[{g}] The mesh is not closed (it has holes or flipped faces)", part=bad[0] if bad else None,
+                evidence=f"is_watertight=False, open parts={bad}", check="watertight",
+                suggestion="Overlap solids by 0.5-1 mm so they fuse / check that 2D sketch outlines are closed")
+        # 2. body count
         if bodies > 1:
-            add("critical", f"[{g}] 1 回で印刷する部品が {bodies} 個に分かれている（浮いた部位がある）",
+            add("critical", f"[{g}] A piece printed in one go is split into {bodies} bodies (some part is floating)",
                 evidence=f"split() bodies={bodies}", check="bodies",
-                suggestion="部位同士を 1mm 程度重ねる。別々に印刷するなら print_group を分ける")
-        # 3. 造形範囲
+                suggestion="Overlap the parts by about 1 mm. If they are printed separately, use separate print_groups")
+        # 3. build volume
         ok = fits(size, vol)
         gres["fits_build_volume"] = ok
         if not ok:
-            add("critical", f"[{g}] 造形範囲 {vol[0]}×{vol[1]}×{vol[2]}mm に収まらない（{size[0]:.1f}×{size[1]:.1f}×{size[2]:.1f}mm）",
+            add("critical", f"[{g}] Does not fit the build volume {vol[0]}×{vol[1]}×{vol[2]} mm ({size[0]:.1f}×{size[1]:.1f}×{size[2]:.1f} mm)",
                 evidence=f"printer={printer['name']}", check="build_volume",
-                suggestion="印刷の向きを変える／分割して print_group を分ける／縮小する")
-        # 4. 接地・重心
+                suggestion="Change the print orientation / split it into separate print_groups / scale it down")
+        # 4. bed contact and center of mass
         inside, contact = com_inside_contact(pm)
         gres["bed_contact_area_mm2"] = round(contact, 1)
         gres["com_inside_contact"] = inside
         if contact <= 0:
-            add("critical", f"[{g}] ベッドに接する平らな面がない", check="bed_contact",
-                suggestion="底に平らな面を作る／印刷の向きを変える")
+            add("critical", f"[{g}] No flat face touches the bed", check="bed_contact",
+                suggestion="Add a flat bottom face / change the print orientation")
         elif contact < float(printer["min_bed_contact_mm2"]) or not inside:
-            add("major", f"[{g}] 接地面が小さい、または重心が接地面の外にあり、印刷中に倒れたり剥がれたりしやすい",
-                evidence=f"接地面積={contact:.1f}mm², 重心が接地面内={inside}", check="bed_contact",
-                suggestion="接地面を広げる／ブリム（つば）を付ける／印刷の向きを変える")
-        # 5. オーバーハング
+            add("major", f"[{g}] The bed contact is small or the center of mass is outside it, so it may tip over or detach while printing",
+                evidence=f"contact area={contact:.1f}mm², center of mass inside contact={inside}", check="bed_contact",
+                suggestion="Widen the contact area / add a brim / change the print orientation")
+        # 5. overhangs
         others = []
         for p in pids:
             o = part_meshes[p].copy()
@@ -303,19 +303,19 @@ def analyze_dir(d: str | Path, write: bool = True) -> dict:
             gres["overhang_regions"].append(item)
             if is_flat and span is not None and span <= max_bridge:
                 bridges.append(item)
-                continue   # 短いブリッジはサポートなしで刷れることが多い（情報のみ）
+                continue   # short bridges usually print without support (info only)
             if is_flat:
-                add("warning", f"[{g}] 下向きの水平面（短辺 {span:.1f}mm）がブリッジ上限 {max_bridge:g}mm を超える。サポートが必要",
+                add("warning", f"[{g}] A downward horizontal face (short side {span:.1f} mm) exceeds the {max_bridge:g} mm bridge limit. Needs support",
                     part=part, direction=item["facing"], location=c_design, check="bridge",
-                    evidence=f"面積={r['area']:.1f}mm², 短辺={span:.1f}mm",
-                    suggestion="サポートを付ける／45° の面取りやアーチ形状にする／向きを変える")
+                    evidence=f"area={r['area']:.1f}mm², short side={span:.1f}mm",
+                    suggestion="Add support / use a 45° chamfer or an arch / change the orientation")
             else:
-                add("warning", f"[{g}] {limit:g}° を超えるオーバーハング（面積 {r['area']:.0f}mm²）。サポートが必要",
+                add("warning", f"[{g}] Overhang beyond {limit:g}° (area {r['area']:.0f} mm²). Needs support",
                     part=part, direction=item["facing"], location=c_design, check="overhang",
-                    evidence=f"面積={r['area']:.1f}mm²",
-                    suggestion="サポートを付ける／45° 以内の面取りにする／向きを変える")
+                    evidence=f"area={r['area']:.1f}mm²",
+                    suggestion="Add support / chamfer it to 45° or less / change the orientation")
         gres["bridges"] = bridges
-        # 6. 肉厚・細部
+        # 6. wall thickness and fine detail
         th, pts = wall_thickness(pm)
         if len(th):
             gres["min_wall_mm"] = round(float(th.min()), 2)
@@ -323,7 +323,7 @@ def analyze_dir(d: str | Path, write: bool = True) -> dict:
             thin = th < min_wall
             gres["thin_samples"] = int(thin.sum())
             if thin.sum() >= 3:
-                # 薄い場所を部位ごとにまとめる
+                # group thin spots by part
                 by_part: dict[str, list] = {}
                 for t, p in zip(th[thin], pts[thin]):
                     pd = to_design(p)
@@ -333,12 +333,12 @@ def analyze_dir(d: str | Path, write: bool = True) -> dict:
                         continue
                     tmin, ploc = min(items, key=lambda x: x[0])
                     sev = "major"
-                    what = "細かすぎて再現されない" if tmin < nozzle else "肉厚が薄い"
-                    add(sev, f"[{g}] {what}（最小 {tmin:.2f}mm、基準 {min_wall:.1f}mm 以上）",
+                    what = "Too fine to print" if tmin < nozzle else "Wall too thin"
+                    add(sev, f"[{g}] {what} (minimum {tmin:.2f} mm, needs {min_wall:.1f} mm or more)",
                         part=part, location=ploc, check="wall_thickness",
-                        evidence=f"肉厚サンプル {len(items)} 点が {min_wall:.1f}mm 未満, 最小 {tmin:.2f}mm",
-                        suggestion=f"{min_wall:.1f}mm 以上（できれば {min_wall * 1.5:.1f}mm）に厚くする")
-        # 7. 向きの候補
+                        evidence=f"{len(items)} thickness samples below {min_wall:.1f}mm, minimum {tmin:.2f}mm",
+                        suggestion=f"Thicken to {min_wall:.1f} mm or more (ideally {min_wall * 1.5:.1f} mm)")
+        # 7. alternative orientations
         cands = []
         for name, rot in AXIS_CANDIDATES.items():
             cm, Mc = place_on_bed(fused, rot)
@@ -357,13 +357,13 @@ def analyze_dir(d: str | Path, write: bool = True) -> dict:
         best = cands[0]
         cur = gres["overhang_area_mm2"]
         if best["fits"] and best["bed_contact_area_mm2"] > 0 and cur > best["overhang_area_mm2"] * 1.5 + 50:
-            add("warning", f"[{g}] 向きを「{best['name']}」（回転 {best['rotation_deg']}）にするとサポートが減る見込み",
+            add("warning", f"[{g}] Printing \"{best['name']}\" (rotation {best['rotation_deg']}) would likely need less support",
                 check="orientation",
-                evidence=f"オーバーハング面積 現在 {cur:.0f}mm² → {best['overhang_area_mm2']:.0f}mm²",
-                suggestion="見た目の面（積層痕・サポート跡）と強度の向きも考えて、ユーザーと相談して決める")
+                evidence=f"overhang area now {cur:.0f}mm² -> {best['overhang_area_mm2']:.0f}mm²",
+                suggestion="Decide with the user, also weighing visible faces (layer lines, support marks) and strength direction")
         groups_out.append(gres)
 
-    # 8. 部品間クリアランス（別々に印刷して組み合わせる場合）
+    # 8. clearance between pieces (printed separately and assembled)
     clearances = []
     gnames = list(pj["print_orientation"]["groups"])
     if len(gnames) > 1:
@@ -385,14 +385,14 @@ def analyze_dir(d: str | Path, write: bool = True) -> dict:
                         "tight_samples": int(tight.sum()), "overlap_mm3": round(iv, 2)}
                 clearances.append(item)
                 if iv > 0.01:
-                    add("major", f"部品 {a} と {b} が組み立て位置で重なっている（{iv:.1f}mm³）",
+                    add("major", f"Pieces {a} and {b} overlap in the assembled position ({iv:.1f} mm³)",
                         part=None, check="clearance", evidence=f"intersection volume={iv:.2f}mm³",
-                        suggestion=f"はめ合い部に {lo_c}〜{hi_c}mm のすき間を設ける")
+                        suggestion=f"Leave a {lo_c}-{hi_c} mm gap where they fit together")
                 elif tight.sum() >= 5:
-                    add("major", f"部品 {a} と {b} のすき間が {gap:.2f}mm と狭く、はまらない恐れ（基準 {lo_c}〜{hi_c}mm）",
+                    add("major", f"The gap between pieces {a} and {b} is only {gap:.2f} mm, so they may not fit (target {lo_c}-{hi_c} mm)",
                         location=pa[k], part=nearest_part(pa[k], part_meshes), check="clearance",
-                        evidence=f"{lo_c}mm 未満のすき間のサンプル {int(tight.sum())} 点, 最小 {gap:.3f}mm",
-                        suggestion=f"すき間を {lo_c}〜{hi_c}mm に広げる（片側あたり）")
+                        evidence=f"{int(tight.sum())} gap samples below {lo_c}mm, minimum {gap:.3f}mm",
+                        suggestion=f"Widen the gap to {lo_c}-{hi_c} mm (per side)")
 
     sev_rank = {"critical": 0, "major": 1, "warning": 2, "info": 3}
     findings.sort(key=lambda f: sev_rank[f["severity"]])
@@ -426,10 +426,10 @@ def main(argv):
         print(json.dumps(res, ensure_ascii=False, indent=2, default=np_default))
     else:
         s = res["summary"]
-        print(f"自動チェック: {s['verdict_hint']}  {s['counts']}  外形 {s['size_mm']} mm")
+        print(f"Auto check: {s['verdict_hint']}  {s['counts']}  size {s['size_mm']} mm")
         for f in res["findings"]:
-            print(f"- [{f['severity']}] {f['issue']}" + (f"（部位: {f['part']}）" if f["part"] else ""))
-        print(f"→ {d / 'analysis.json'}")
+            print(f"- [{f['severity']}] {f['issue']}" + (f" (part: {f['part']})" if f["part"] else ""))
+        print(f"-> {d / 'analysis.json'}")
     return 0
 
 

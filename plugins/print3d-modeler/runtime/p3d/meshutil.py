@@ -1,4 +1,4 @@
-"""形状変換・回転・方向ラベルなどの共通処理。"""
+"""Shared helpers: shape conversion, rotation, direction labels."""
 from __future__ import annotations
 
 import math
@@ -8,20 +8,20 @@ from pathlib import Path
 import numpy as np
 import trimesh
 
-# 方向の語彙（ユーザー・メイン・レビュアー・ビューアで共通）
+# Direction vocabulary (shared by the user, the main agent, the reviewers and the viewer)
 DIRECTION_LABELS = {
-    "+Z": "上", "-Z": "下",
-    "-Y": "前", "+Y": "後",
-    "+X": "右", "-X": "左",
+    "+Z": "up", "-Z": "down",
+    "-Y": "front", "+Y": "back",
+    "+X": "right", "-X": "left",
 }
 _AXES = {"+X": (1, 0, 0), "-X": (-1, 0, 0), "+Y": (0, 1, 0), "-Y": (0, -1, 0), "+Z": (0, 0, 1), "-Z": (0, 0, -1)}
 
-STL_TOLERANCE = 0.02       # build123d → メッシュ化の弦誤差 [mm]
-STL_ANGULAR = 0.15         # 角度誤差 [rad]
+STL_TOLERANCE = 0.02       # chord tolerance when meshing build123d shapes [mm]
+STL_ANGULAR = 0.15         # angular tolerance [rad]
 
 
 def direction_of(vec) -> str:
-    """ベクトルに最も近い方向キー（"+Z" など）。"""
+    """Direction key closest to the vector (such as "+Z")."""
     v = np.asarray(vec, dtype=float)
     n = np.linalg.norm(v)
     if n < 1e-9:
@@ -32,11 +32,11 @@ def direction_of(vec) -> str:
 
 def direction_label(vec) -> str:
     k = direction_of(vec)
-    return f"{DIRECTION_LABELS[k]}({k})"
+    return f"{DIRECTION_LABELS[k]} ({k})"
 
 
 def to_trimesh(obj) -> trimesh.Trimesh:
-    """build123d の形状 / manifold3d.Manifold / trimesh.Trimesh をメッシュに変換する。"""
+    """Convert a build123d shape, manifold3d.Manifold or trimesh.Trimesh to a mesh."""
     if isinstance(obj, trimesh.Trimesh):
         return obj.copy()
     mod = type(obj).__module__
@@ -46,18 +46,18 @@ def to_trimesh(obj) -> trimesh.Trimesh:
         faces = np.asarray(mesh.tri_verts)
         return trimesh.Trimesh(vertices=verts, faces=faces, process=True)
     if mod.startswith("build123d") or hasattr(obj, "wrapped"):
-        from build123d import export_stl  # 遅延 import（manifold だけ使う場合に不要なため）
+        from build123d import export_stl  # lazy import (not needed when only manifold is used)
         with tempfile.TemporaryDirectory() as td:
             p = Path(td) / "s.stl"
             export_stl(obj, str(p), tolerance=STL_TOLERANCE, angular_tolerance=STL_ANGULAR)
             m = trimesh.load_mesh(p, process=True)
         m.merge_vertices()
         return m
-    raise TypeError(f"形状として扱えない型です: {type(obj)}")
+    raise TypeError(f"Cannot use this type as a shape: {type(obj)}")
 
 
 def to_manifold(mesh: trimesh.Trimesh):
-    """trimesh → manifold3d.Manifold。多様体にできなければ None。"""
+    """trimesh -> manifold3d.Manifold. Returns None if it cannot be made manifold."""
     import manifold3d as mf
     m = mf.Manifold(mf.Mesh(vert_properties=np.asarray(mesh.vertices, dtype=np.float32),
                             tri_verts=np.asarray(mesh.faces, dtype=np.uint32)))
@@ -71,7 +71,7 @@ def manifold_to_trimesh(m) -> trimesh.Trimesh:
 
 
 def boolean(meshes: list[trimesh.Trimesh], op: str = "union") -> trimesh.Trimesh | None:
-    """manifold3d によるブーリアン。失敗したら None。"""
+    """Boolean operation with manifold3d. Returns None on failure."""
     import manifold3d as mf
     ms = [to_manifold(m) for m in meshes]
     if any(x is None for x in ms):
@@ -81,7 +81,7 @@ def boolean(meshes: list[trimesh.Trimesh], op: str = "union") -> trimesh.Trimesh
 
 
 def rotation_matrix(rotation_deg) -> np.ndarray:
-    """X→Y→Z の順に（固定軸まわりで）回す 4x4 行列。"""
+    """4x4 matrix that rotates about the fixed X, then Y, then Z axes."""
     rx, ry, rz = (math.radians(a) for a in rotation_deg)
     m = trimesh.transformations.euler_matrix(rx, ry, rz, axes="sxyz")
     m[np.abs(m) < 1e-12] = 0.0
@@ -89,7 +89,7 @@ def rotation_matrix(rotation_deg) -> np.ndarray:
 
 
 def place_on_bed(mesh: trimesh.Trimesh, rotation_deg, x_offset: float = 0.0) -> tuple[trimesh.Trimesh, np.ndarray]:
-    """回転してから、底を Z=0 に、XY 中心を (x_offset, 0) に合わせる。変換行列も返す。"""
+    """Rotate, then put the bottom at Z=0 and the XY center at (x_offset, 0). Also returns the matrix."""
     R = rotation_matrix(rotation_deg)
     tmp = mesh.copy()
     tmp.apply_transform(R)
@@ -107,7 +107,7 @@ def round_list(a, nd=2):
 
 
 def np_default(o):
-    """json.dumps(default=...) 用：numpy の値を Python の値にする。"""
+    """For json.dumps(default=...): convert numpy values to Python values."""
     if isinstance(o, np.generic):
         return o.item()
     if isinstance(o, np.ndarray):

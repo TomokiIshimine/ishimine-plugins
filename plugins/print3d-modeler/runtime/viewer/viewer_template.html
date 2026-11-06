@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="ja">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>3Dモデル確認ビューア</title>
+<title>3D Model Viewer</title>
 <style>
   :root {
     --bg: #eef1f4; --panel: #ffffff; --stage: #dfe4e9; --ink: #1a222b; --muted: #5a6876; --line: #d3dae1;
@@ -24,7 +24,8 @@
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink);
-    font-family: "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", "Meiryo", system-ui, sans-serif; font-size: 14px; }
+    font-family: system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", "Meiryo", sans-serif; font-size: 14px; }
+  html:lang(ja) body { font-family: "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", "Meiryo", system-ui, sans-serif; }
   #app { display: grid; grid-template-columns: minmax(0, 1fr) 0; height: 100vh; }
   #app.open { grid-template-columns: minmax(0, 1fr) 320px; }
   main { position: relative; overflow: hidden; background: var(--stage); }
@@ -42,7 +43,7 @@
   .mini { border: 1px solid var(--line); background: var(--chip); color: var(--ink); border-radius: 6px;
     padding: 1px 7px; font-size: 11px; cursor: pointer; font-weight: 400; letter-spacing: 0; }
   .mini:hover { border-color: var(--accent); }
-  /* パーツの表示ツリー */
+  /* part visibility tree */
   .obj { margin-bottom: 4px; }
   .row { display: flex; align-items: center; gap: 7px; padding: 4px 6px; border-radius: 6px; }
   .row:hover, .row.hl { background: var(--chip); }
@@ -64,7 +65,7 @@
   label.tg input { accent-color: var(--accent); }
   .legend { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--muted); margin-right: 10px; }
   .legend i { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
-  /* 3D 表示の上に重ねるもの */
+  /* overlays on top of the 3D view */
   #view { position: absolute; inset: 0; }
   #labels { position: absolute; inset: 0; pointer-events: none; }
   .lbl { pointer-events: auto; background: var(--panel); color: var(--ink); border: 2px solid; border-radius: 6px;
@@ -105,50 +106,102 @@
     <div id="view"></div>
     <div id="labels"></div>
     <div id="toolbar"></div>
-    <button id="panelBtn" aria-expanded="false" title="パーツの表示・表示オプション（P キー）">☰ パーツ・表示</button>
-    <canvas id="gizmo" title="クリックした方向から見る"></canvas>
-    <div id="hint">左ドラッグ：回転　ホイール：拡大縮小（カーソル位置へ）　右ドラッグ / Shift+ドラッグ：移動　ダブルクリック：その点を回転の中心に</div>
+    <button id="panelBtn" aria-expanded="false" data-i18n-title="panelTitle"></button>
+    <canvas id="gizmo" data-i18n-title="gizmoTitle"></canvas>
+    <div id="hint" data-i18n="hint"></div>
     <div id="tip"></div>
     <div id="err"></div>
   </main>
   <aside>
-    <h1 id="title">モデル</h1>
+    <h1 id="title"></h1>
     <div class="sub" id="subtitle"></div>
 
-    <h2><span>パーツ</span><span><button class="mini" id="showAll">すべて表示</button></span></h2>
+    <h2><span data-i18n="parts"></span><span><button class="mini" id="showAll" data-i18n="showAll"></button></span></h2>
     <div id="tree"></div>
-    <div class="seg">外したパーツ：
-      <button class="chip" data-ghost="ghost">半透明</button>
-      <button class="chip" data-ghost="hide">非表示</button>
+    <div class="seg"><span data-i18n="unchecked"></span>
+      <button class="chip" data-ghost="ghost" data-i18n="ghost"></button>
+      <button class="chip" data-ghost="hide" data-i18n="hide"></button>
     </div>
 
-    <h2><span>表示</span></h2>
-    <label class="tg"><input type="checkbox" id="tgLabels"> 部位ラベル</label>
-    <label class="tg"><input type="checkbox" id="tgDirs" checked> 方向（矢印とラベル）</label>
-    <label class="tg"><input type="checkbox" id="tgOver"> サポートが要りそうな面（印刷の向きで判定）</label>
-    <label class="tg"><input type="checkbox" id="tgContact"> ベッドに接する面</label>
-    <label class="tg"><input type="checkbox" id="tgCoin" checked> 大きさの目安（1円玉）</label>
-    <div style="margin-top:4px"><span class="legend"><i style="background:#e03131"></i>サポート要</span><span class="legend"><i style="background:var(--contact)"></i>ベッドに接する面</span></div>
+    <h2><span data-i18n="display"></span></h2>
+    <label class="tg"><input type="checkbox" id="tgLabels"> <span data-i18n="tgLabels"></span></label>
+    <label class="tg"><input type="checkbox" id="tgDirs" checked> <span data-i18n="tgDirs"></span></label>
+    <label class="tg"><input type="checkbox" id="tgOver"> <span data-i18n="tgOver"></span></label>
+    <label class="tg"><input type="checkbox" id="tgContact"> <span data-i18n="tgContact"></span></label>
+    <label class="tg"><input type="checkbox" id="tgCoin" checked> <span data-i18n="tgCoin"></span></label>
+    <div style="margin-top:4px"><span class="legend"><i style="background:#e03131"></i><span data-i18n="legendOver"></span></span><span class="legend"><i style="background:var(--contact)"></i><span data-i18n="legendContact"></span></span></div>
   </aside>
 </div>
 
 <script>window.MODEL = /*__MODEL_DATA__*/null;</script>
+<script>
+// UI text. The language is chosen when the viewer is built (MODEL.lang: "en" or "ja").
+// Part names, descriptions and key dimensions come from model.py as written.
+window.P3D_I18N = {
+  en: {
+    pageTitle: "3D Model Viewer",
+    panelTitle: "Parts and display options (P key)", panelOpen: "☰ Parts & view", panelClose: "✕ Close",
+    gizmoTitle: "Click a direction to view from it",
+    hint: "Left drag: rotate · Wheel: zoom (toward cursor) · Right drag / Shift+drag: pan · Double-click: set rotation center",
+    parts: "Parts", showAll: "Show all", unchecked: "Unchecked parts:", ghost: "Transparent", hide: "Hidden",
+    display: "Display", tgLabels: "Part labels", tgDirs: "Directions (arrows and labels)",
+    tgOver: "Faces likely to need support (judged in print orientation)", tgContact: "Faces touching the bed",
+    tgCoin: "Size reference (Ø20 mm coin)", legendOver: "Needs support", legendContact: "Touches the bed",
+    modeDesign: "As used", modePrint: "Print orientation",
+    views: ["Front", "Back", "Right", "Left", "Top", "Bottom", "Overview"],
+    dirs: { up: "Up", down: "Down", front: "Front", back: "Back", right: "Right", left: "Left" },
+    gizmo: { up: "U", down: "D", front: "F", back: "B", right: "R", left: "L" },
+    coin: "Coin (Ø20 mm)",
+    size: (s) => `Size ${s.join(" × ")} mm (W × D × H)`, built: (t) => `Built ${t}`,
+    nParts: (n) => `${n} ${n === 1 ? "part" : "parts"}`, only: "Only",
+    onlyObj: "Show only this object", onlyPart: "Show only this part", toggleObj: "Expand / collapse",
+    bbox: (s) => `Size ${s.join("×")} mm`,
+    error: "Could not start the 3D view. Please open it in a recent version of Chrome, Edge, Safari or Firefox.",
+  },
+  ja: {
+    pageTitle: "3Dモデル確認ビューア",
+    panelTitle: "パーツの表示・表示オプション（P キー）", panelOpen: "☰ パーツ・表示", panelClose: "✕ 閉じる",
+    gizmoTitle: "クリックした方向から見る",
+    hint: "左ドラッグ：回転　ホイール：拡大縮小（カーソル位置へ）　右ドラッグ / Shift+ドラッグ：移動　ダブルクリック：その点を回転の中心に",
+    parts: "パーツ", showAll: "すべて表示", unchecked: "外したパーツ：", ghost: "半透明", hide: "非表示",
+    display: "表示", tgLabels: "部位ラベル", tgDirs: "方向（矢印とラベル）",
+    tgOver: "サポートが要りそうな面（印刷の向きで判定）", tgContact: "ベッドに接する面",
+    tgCoin: "大きさの目安（1円玉）", legendOver: "サポート要", legendContact: "ベッドに接する面",
+    modeDesign: "使うときの向き", modePrint: "印刷の向き",
+    views: ["前から", "後ろから", "右から", "左から", "上から", "下から", "全体"],
+    dirs: { up: "上", down: "下", front: "前", back: "後", right: "右", left: "左" },
+    gizmo: { up: "上", down: "下", front: "前", back: "後", right: "右", left: "左" },
+    coin: "1円玉（直径20mm）",
+    size: (s) => `外形 ${s.join(" × ")} mm（幅×奥行×高さ）`, built: (t) => `作成 ${t}`,
+    nParts: (n) => `${n} パーツ`, only: "のみ",
+    onlyObj: "このオブジェクトだけ表示", onlyPart: "このパーツだけ表示", toggleObj: "開く／たたむ",
+    bbox: (s) => `外形 ${s.join("×")} mm`,
+    error: "3D 表示を開始できませんでした。最新の Chrome / Edge / Safari / Firefox で開いてください。",
+  },
+};
+window.P3D_LANG = (window.MODEL && window.P3D_I18N[window.MODEL.lang]) ? window.MODEL.lang : "en";
+</script>
 <script type="module">
-// three.js は上の <script> に同梱（外部読み込み・data: URL なし。ローカルでもアーティファクトでも動く）
+// three.js is bundled in the <script> above (no external loads or data: URLs, so it works locally and in artifacts)
 const { THREE, OrbitControls, CSS2DRenderer, CSS2DObject } = window.P3D_THREE;
 
 const M = window.MODEL;
-THREE.Object3D.DEFAULT_UP.set(0, 0, 1);          // 3D プリンタ流：Z が上
+const L = window.P3D_I18N[window.P3D_LANG];
+document.documentElement.lang = window.P3D_LANG;
+document.title = M.title ? `${M.title} – ${L.pageTitle}` : L.pageTitle;
+document.querySelectorAll("[data-i18n]").forEach((el) => { el.textContent = L[el.dataset.i18n]; });
+document.querySelectorAll("[data-i18n-title]").forEach((el) => { el.title = L[el.dataset.i18nTitle]; });
+THREE.Object3D.DEFAULT_UP.set(0, 0, 1);          // 3D printer convention: Z is up
 const $ = (id) => document.getElementById(id);
 const css = getComputedStyle(document.documentElement);
 const cssv = (k) => css.getPropertyValue(k).trim();
 const DIRS = [
-  { key: "上", v: [0, 0, 1],  color: cssv("--ax-z") },
-  { key: "下", v: [0, 0, -1], color: cssv("--ax-z") },
-  { key: "前", v: [0, -1, 0], color: cssv("--ax-y") },
-  { key: "後", v: [0, 1, 0],  color: cssv("--ax-y") },
-  { key: "右", v: [1, 0, 0],  color: cssv("--ax-x") },
-  { key: "左", v: [-1, 0, 0], color: cssv("--ax-x") },
+  { key: "up",    v: [0, 0, 1],  color: cssv("--ax-z") },
+  { key: "down",  v: [0, 0, -1], color: cssv("--ax-z") },
+  { key: "front", v: [0, -1, 0], color: cssv("--ax-y") },
+  { key: "back",  v: [0, 1, 0],  color: cssv("--ax-y") },
+  { key: "right", v: [1, 0, 0],  color: cssv("--ax-x") },
+  { key: "left",  v: [-1, 0, 0], color: cssv("--ax-x") },
 ];
 const pid = (i) => `P${i + 1}`;
 const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
@@ -176,8 +229,8 @@ renderer.domElement.addEventListener("pointerdown", (e) => { if (e.shiftKey && e
 window.addEventListener("pointerup", () => { controls.mouseButtons.LEFT = THREE.MOUSE.ROTATE; });
 
 // ---------------------------------------------------------------- model
-// 角（折れ目）で法線を分けた形状を作る。頂点を共有したまま法線を平均すると、平らな面に
-// グラデーションの陰が出て二重に見えるため。CREASE_DEG より緩い折れ目（曲面）だけ滑らかにする。
+// Build geometry with normals split at creases. Averaging normals over shared vertices shades flat faces
+// with a gradient that looks doubled. Only folds gentler than CREASE_DEG (curved surfaces) are smoothed.
 const CREASE_DEG = 30;
 function creasedGeometry(positions, indices) {
   const n = indices.length, pos = new Float32Array(n * 3), nor = new Float32Array(n * 3);
@@ -191,7 +244,7 @@ function creasedGeometry(positions, indices) {
     }
   }
   const faceN = nor.slice();
-  const byVert = new Map();                            // 元の頂点番号 → その頂点を使う角の一覧
+  const byVert = new Map();                            // original vertex index -> corners that use it
   for (let i = 0; i < n; i++) { const v = indices[i]; (byVert.get(v) || byVert.set(v, []).get(v)).push(i); }
   const lim = Math.cos(THREE.MathUtils.degToRad(CREASE_DEG));
   for (const corners of byVert.values()) {
@@ -230,8 +283,8 @@ M.parts.forEach((p, i) => {
   g.computeBoundingBox(); designBox.union(g.boundingBox);
 });
 
-// サポート要の面・接地面（Python 側で計算済み：結合後の形で判定し、真下の部位に支えられた面は除外）
-// 常に「印刷の向き」で判定した結果。使うときの向きでは同じ面をその向きのまま表示する
+// Faces needing support and faces touching the bed (computed in Python on the fused shape, excluding faces
+// supported by the part below). Always judged in print orientation; in the as-used view the same faces are shown in place.
 const overMat = new THREE.MeshBasicMaterial({ color: 0xe03131, side: THREE.DoubleSide,
   polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
 const contactMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(cssv("--contact")), side: THREE.DoubleSide,
@@ -258,7 +311,7 @@ function placeOverlays() {
 const dSize = designBox.getSize(new THREE.Vector3());
 const R = Math.max(dSize.x, dSize.y, dSize.z, 10);
 
-// ---------------------------------------------------------------- 部位ラベル・場所ラベル（初期は非表示）
+// ---------------------------------------------------------------- part labels and feature labels (hidden at first)
 const labelObjs = M.parts.map((p, i) => {
   const el = document.createElement("div");
   el.className = "lbl"; el.style.borderColor = p.color;
@@ -280,7 +333,7 @@ const featObjs = (M.features || []).map((f) => {
   return { obj, dot, el, f, part: nearestPart(f.position) };
 });
 
-// ---------------------------------------------------------------- ベッド・方向・1円玉
+// ---------------------------------------------------------------- bed, directions, size-reference coin
 const bed = new THREE.Group(); scene.add(bed);
 const dirGroup = new THREE.Group(); scene.add(dirGroup);
 const dirLabels = [];
@@ -289,7 +342,7 @@ let coinLabel;
 {
   const cm = new THREE.Mesh(new THREE.CylinderGeometry(10, 10, 1.5, 48), new THREE.MeshStandardMaterial({ color: 0xc9ccd1, metalness: .6, roughness: .35 }));
   cm.rotation.x = Math.PI / 2; cm.position.z = 0.75; coin.add(cm);
-  coinLabel = new CSS2DObject(Object.assign(document.createElement("div"), { className: "coin", textContent: "1円玉（直径20mm）" }));
+  coinLabel = new CSS2DObject(Object.assign(document.createElement("div"), { className: "coin", textContent: L.coin }));
   coinLabel.position.set(0, 0, 4); coinLabel.center.set(0.5, 1.4); coin.add(coinLabel);
 }
 function buildBed(mode, box) {
@@ -320,14 +373,14 @@ function buildDirs(box) {
   const c = box.getCenter(new THREE.Vector3()), s = box.getSize(new THREE.Vector3());
   const reach = Math.max(s.x, s.y) * 0.5 + R * 0.35;
   for (const d of DIRS) {
-    if (d.key === "下") continue;
+    if (d.key === "down") continue;
     const v = new THREE.Vector3(...d.v);
-    const origin = d.key === "上"
+    const origin = d.key === "up"
       ? new THREE.Vector3(c.x - reach * .9, c.y + reach * .9, 0)
       : new THREE.Vector3(c.x, c.y, 0.2).add(v.clone().multiplyScalar(reach));
-    const len = d.key === "上" ? s.z * 0.9 + 10 : R * 0.3;
+    const len = d.key === "up" ? s.z * 0.9 + 10 : R * 0.3;
     dirGroup.add(new THREE.ArrowHelper(v, origin, len, new THREE.Color(d.color), len * 0.22, len * 0.12));
-    const el = Object.assign(document.createElement("div"), { className: "dir", textContent: d.key });
+    const el = Object.assign(document.createElement("div"), { className: "dir", textContent: L.dirs[d.key] });
     el.style.background = d.color;
     const lab = new CSS2DObject(el);
     lab.position.copy(origin.clone().add(v.clone().multiplyScalar(len * 1.18)));
@@ -335,7 +388,7 @@ function buildDirs(box) {
   }
 }
 
-// ---------------------------------------------------------------- 表示モード（使うときの向き / 印刷の向き）
+// ---------------------------------------------------------------- view mode (as used / print orientation)
 let mode = "design";
 const curBox = designBox.clone();
 const tmpBox = new THREE.Box3();
@@ -381,7 +434,7 @@ function nearestPart(p) {
   return bi;
 }
 
-// ---------------------------------------------------------------- ギズモ（右下：常に今の向きを示す）
+// ---------------------------------------------------------------- gizmo (bottom right: always shows the current orientation)
 const gCanvas = $("gizmo");
 const gRenderer = new THREE.WebGLRenderer({ canvas: gCanvas, antialias: true, alpha: true });
 gRenderer.setPixelRatio(window.devicePixelRatio);
@@ -390,9 +443,9 @@ const gCam = new THREE.OrthographicCamera(-1.6, 1.6, 1.6, -1.6, 0.1, 10);
 const gTargets = [];
 for (const d of DIRS) {
   const v = new THREE.Vector3(...d.v);
-  const neg = ["下", "後", "左"].includes(d.key);
+  const neg = ["down", "back", "left"].includes(d.key);
   if (!neg) gScene.add(new THREE.ArrowHelper(v, new THREE.Vector3(), 0.85, new THREE.Color(d.color), 0.2, 0.12));
-  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: textSprite(d.key, d.color, neg), depthTest: false }));
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: textSprite(L.gizmo[d.key], d.color, neg), depthTest: false }));
   sp.position.copy(v.clone().multiplyScalar(1.15)); sp.scale.setScalar(neg ? 0.42 : 0.5);
   sp.userData.dir = v; gScene.add(sp); gTargets.push(sp);
 }
@@ -404,11 +457,11 @@ gCanvas.addEventListener("click", (e) => {
   if (hit) viewFrom(hit.object.userData.dir.toArray());
 });
 
-// ---------------------------------------------------------------- ツールバー
-const VIEWS = [["前から", [0, -1, 0]], ["後ろから", [0, 1, 0]], ["右から", [1, 0, 0]],
-               ["左から", [-1, 0, 0]], ["上から", [0, 0, 1]], ["下から", [0, 0, -1]], ["全体", [0.9, -1.3, 0.9]]];
+// ---------------------------------------------------------------- toolbar
+const VIEWS = [[0, -1, 0], [0, 1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1], [0.9, -1.3, 0.9]]
+  .map((v, i) => [L.views[i], v]);
 const tb = $("toolbar");
-for (const [name, m] of [["使うときの向き", "design"], ["印刷の向き", "print"]]) {
+for (const [name, m] of [[L.modeDesign, "design"], [L.modePrint, "print"]]) {
   const b = Object.assign(document.createElement("button"), { className: "chip", textContent: name });
   b.dataset.mode = m; b.onclick = () => setMode(m); tb.appendChild(b);
 }
@@ -417,7 +470,7 @@ for (const [name, v] of VIEWS) {
   const b = Object.assign(document.createElement("button"), { className: "chip", textContent: name });
   b.onclick = () => viewFrom(v); tb.appendChild(b);
 }
-// 見えている（チェックの入った）パーツに合わせて視点を決める。無ければ全体
+// Frame the visible (checked) parts. If none are checked, frame everything
 function visibleBox() {
   const box = new THREE.Box3();
   meshes.forEach((m, i) => { if (shown[i]) { tmpBox.copy(m.geometry.boundingBox).applyMatrix4(m.matrix); box.union(tmpBox); } });
@@ -434,28 +487,29 @@ function viewFrom(v) {
   controls.update();
 }
 
-// ---------------------------------------------------------------- 右パネル（初期は閉じる）
+// ---------------------------------------------------------------- right panel (closed at first)
 const app = $("app"), panelBtn = $("panelBtn");
 function togglePanel(open = !app.classList.contains("open")) {
   app.classList.toggle("open", open);
   panelBtn.setAttribute("aria-expanded", String(open));
-  panelBtn.textContent = open ? "✕ 閉じる" : "☰ パーツ・表示";
+  panelBtn.textContent = open ? L.panelClose : L.panelOpen;
 }
 panelBtn.onclick = () => togglePanel();
+togglePanel(false);
 window.addEventListener("keydown", (e) => {
   if (e.target.closest?.("input, textarea") || e.metaKey || e.ctrlKey || e.altKey) return;
   if (e.key === "p" || e.key === "P") togglePanel();
 });
 
 $("title").textContent = M.title;
-$("subtitle").innerHTML = `外形 ${M.size_mm.join(" × ")} mm（幅×奥行×高さ）` + (M.built_at ? `<br>作成 ${esc(M.built_at)}` : "");
+$("subtitle").innerHTML = esc(L.size(M.size_mm)) + (M.built_at ? `<br>${esc(L.built(M.built_at))}` : "");
 
-// ---------------------------------------------------------------- パーツの表示（オブジェクト > パーツ のネスト式チェックボックス）
+// ---------------------------------------------------------------- part visibility (nested checkboxes: object > part)
 const shown = M.parts.map(() => true);
-let ghostMode = "ghost";                       // チェックを外したパーツ: ghost=半透明 / hide=非表示
+let ghostMode = "ghost";                       // unchecked parts: ghost = transparent / hide = hidden
 const objects = (M.objects && M.objects.length) ? M.objects
   : [...new Set(M.parts.map((p) => p.group))].map((g) => ({ id: g, label: g }));
-const nested = objects.length > 1;             // オブジェクトが 1 つならパーツだけを並べる
+const nested = objects.length > 1;             // with a single object, list the parts only
 const partRows = [], objRows = [];
 for (const o of objects) {
   const idx = M.parts.map((p, i) => [p, i]).filter(([p]) => p.group === o.id).map(([, i]) => i);
@@ -464,9 +518,9 @@ for (const o of objects) {
   let kids = wrap;
   if (nested) {
     const r = document.createElement("div"); r.className = "row head";
-    r.innerHTML = `<button class="caret" title="開く／たたむ">▼</button><input type="checkbox" checked>`
-      + `<span class="name">${esc(o.label)} <span class="cnt">${idx.length} パーツ</span></span>`
-      + `<button class="mini only" title="このオブジェクトだけ表示">のみ</button>`;
+    r.innerHTML = `<button class="caret" title="${esc(L.toggleObj)}">▼</button><input type="checkbox" checked>`
+      + `<span class="name">${esc(o.label)} <span class="cnt">${esc(L.nParts(idx.length))}</span></span>`
+      + `<button class="mini only" title="${esc(L.onlyObj)}">${esc(L.only)}</button>`;
     const cb = r.querySelector("input");
     cb.onchange = () => { idx.forEach((i) => { shown[i] = cb.checked; }); applyVisibility(); };
     r.querySelector(".caret").onclick = () => wrap.classList.toggle("closed");
@@ -483,7 +537,7 @@ for (const o of objects) {
     const r = document.createElement("div"); r.className = "row";
     r.innerHTML = `<input type="checkbox" checked><span class="pid">${pid(i)}</span><span class="sw" style="background:${p.color}"></span>`
       + `<span class="name">${esc(p.label)}<span class="dims">${esc(fmtDims(p.key_dims))}</span></span>`
-      + `<button class="mini only" title="このパーツだけ表示">のみ</button>`;
+      + `<button class="mini only" title="${esc(L.onlyPart)}">${esc(L.only)}</button>`;
     r.title = p.description || "";
     const cb = r.querySelector("input");
     cb.onchange = () => { shown[i] = cb.checked; applyVisibility(); };
@@ -498,7 +552,7 @@ for (const o of objects) {
 $("showAll").onclick = () => { shown.fill(true); applyVisibility(); };
 document.querySelectorAll("[data-ghost]").forEach((b) => b.onclick = () => { ghostMode = b.dataset.ghost; applyVisibility(); });
 
-// 表示状態をまとめて反映する（パーツ・ラベル・重ね表示）
+// Apply all visibility state at once (parts, labels, overlays)
 function applyVisibility() {
   const ghost = ghostMode === "ghost";
   meshes.forEach((m, i) => {
@@ -522,9 +576,9 @@ function applyVisibility() {
     l.el.classList.toggle("dim", !shown[l.index]);
   });
   featObjs.forEach((f) => { const vis = lab && (f.part === undefined || shown[f.part]); f.obj.visible = f.dot.visible = vis; });
-  const dirOn = $("tgDirs").checked && mode === "design";     // 矢印とラベルを一緒に切り替える
+  const dirOn = $("tgDirs").checked && mode === "design";     // arrows and labels toggle together
   dirGroup.visible = dirOn; dirLabels.forEach((l) => { l.visible = dirOn; });
-  // サポート・接地面は、そのオブジェクトのパーツが 1 つでも表示されていれば出す
+  // Show support/contact faces when at least one part of that object is visible
   const groupOn = {};
   M.parts.forEach((p, i) => { groupOn[p.group] = groupOn[p.group] || shown[i]; });
   overGroup.visible = $("tgOver").checked; contactGroup.visible = $("tgContact").checked;
@@ -533,7 +587,7 @@ function applyVisibility() {
 }
 for (const id of ["tgLabels", "tgDirs", "tgOver", "tgContact", "tgCoin"]) $(id).addEventListener("change", applyVisibility);
 
-// ---------------------------------------------------------------- ホバー（パーツ名を表示し、そのパーツを光らせる）
+// ---------------------------------------------------------------- hover (show the part name and highlight the part)
 let hovered = [];
 function setHover(list) {
   hovered.forEach((i) => meshes[i].userData.mat.emissive.setHex(0x000000));
@@ -548,7 +602,7 @@ function showTip(e, i) {
   tip.innerHTML = `<b>${pid(i)} ${esc(p.label)}</b>` + (nested ? ` <span class="sub">${esc(objLabel[p.group] ?? p.group)}</span>` : "")
     + (p.description ? `<br>${esc(p.description)}` : "")
     + (fmtDims(p.key_dims) ? `<br><span class="sub">${esc(fmtDims(p.key_dims))}</span>` : "")
-    + `<br><span class="sub">外形 ${p.size_mm.join("×")} mm</span>`;
+    + `<br><span class="sub">${esc(L.bbox(p.size_mm))}</span>`;
   const r = host.getBoundingClientRect();
   tip.style.left = `${Math.min(e.clientX - r.left + 14, r.width - 270)}px`; tip.style.top = `${e.clientY - r.top + 14}px`;
   tip.style.display = "block";
@@ -557,7 +611,7 @@ function hideTip() { tip.style.display = "none"; }
 const rc = new THREE.Raycaster();
 const ndc = (e) => { const r = renderer.domElement.getBoundingClientRect();
   return new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1); };
-// 半透明のパーツは素通りして、奥の表示中のパーツを拾う
+// Pick through transparent parts to the visible part behind them
 const pick = (e) => { rc.setFromCamera(ndc(e), camera); return rc.intersectObjects(meshes.filter((m, i) => shown[i]), false)[0]; };
 let lastMove = 0;
 renderer.domElement.addEventListener("pointermove", (e) => {
@@ -567,14 +621,14 @@ renderer.domElement.addEventListener("pointermove", (e) => {
   if (hit) { showTip(e, hit.object.userData.index); setHover([hit.object.userData.index]); } else { hideTip(); setHover(null); }
 });
 renderer.domElement.addEventListener("pointerleave", () => { hideTip(); setHover(null); });
-renderer.domElement.addEventListener("dblclick", (e) => {          // その点を回転の中心にする
+renderer.domElement.addEventListener("dblclick", (e) => {          // make that point the rotation center
   const hit = pick(e);
   if (!hit) return;
   const delta = hit.point.clone().sub(controls.target);
   controls.target.add(delta); camera.position.add(delta); controls.update();
 });
 
-// ---------------------------------------------------------------- ループ
+// ---------------------------------------------------------------- render loop
 function resize() {
   const w = host.clientWidth, h = host.clientHeight;
   renderer.setSize(w, h); labelRenderer.setSize(w, h);
@@ -614,15 +668,15 @@ function textSprite(t, color, hollow) {
   if (hollow) { x.fillStyle = "#ffffff"; x.fill(); x.lineWidth = 8; x.strokeStyle = color; x.stroke(); }
   else { x.fillStyle = color; x.fill(); }
   x.fillStyle = hollow ? color : "#ffffff";
-  x.font = "bold 72px 'Hiragino Sans','Noto Sans JP',sans-serif"; x.textAlign = "center"; x.textBaseline = "middle";
+  x.font = "bold 72px system-ui,'Hiragino Sans','Noto Sans JP',sans-serif"; x.textAlign = "center"; x.textBaseline = "middle";
   x.fillText(t, 64, 70);
   const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; return tex;
 }
 </script>
 <script>
-  // three.js の読み込みに失敗したとき（古いブラウザなど）の案内
+  // Shown when three.js fails to start (old browsers, etc.)
   setTimeout(() => { if (!window.__ready) { const e = document.getElementById("err"); e.style.display = "grid";
-    e.textContent = "3D 表示を開始できませんでした。最新の Chrome / Edge / Safari / Firefox で開いてください。"; } }, 6000);
+    e.textContent = window.P3D_I18N[window.P3D_LANG || "en"].error; } }, 6000);
 </script>
 </body>
 </html>

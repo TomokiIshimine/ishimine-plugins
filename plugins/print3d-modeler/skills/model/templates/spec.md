@@ -1,28 +1,30 @@
-# 要件: <モデルの日本語名>（<model-slug>）
+# Requirements: <model name> (<model-slug>)
 
-- 作成: YYYY-MM-DD ／ 最終更新: YYYY-MM-DD
-- 用途: <何を・どこで・どう使うか>
+<!-- Write this file in the user's language (translate the headings too). Keep requirement IDs (R1, R2…) as they are. -->
 
-## 印刷環境
-- プリンタ: <機種名>（造形範囲 X×Y×Z mm）<「仮」なら明記>
-- ノズル径: 0.4 mm ／ 材料: PLA
-- 方式: FDM
+- Created: YYYY-MM-DD / Last updated: YYYY-MM-DD
+- Purpose: <what it is, where and how it is used>
 
-## 要件一覧
-<!-- 1 行 1 件。ID は振り直さない。取り消した要件は ~~打ち消し~~ にして理由を書く。 -->
-<!-- 種別: 寸法 / 形状 / 機能 / 見た目 / 印刷 -->
+## Print environment
+- Printer: <model name> (build volume X×Y×Z mm) <say so if provisional>
+- Nozzle: 0.4 mm / Material: PLA
+- Process: FDM
 
-| ID | 種別 | 要件 | 確認方法 |
+## Requirements
+<!-- One per line. Never renumber IDs. Strike cancelled requirements through with ~~strikethrough~~ and give the reason. -->
+<!-- Type: dimension / shape / function / look / printing -->
+
+| ID | Type | Requirement | How to verify |
 |---|---|---|---|
-| R1 | 寸法 | 外形はおよそ 幅 80 × 奥行 90 × 高さ 100 mm（±5mm） | measure で外形を実測 |
-| R2 | 機能 | 厚さ 12mm（ケース込み）のスマホを立てて置ける | 背もたれと前ストッパーの間隔 ≥ 14mm |
-| R3 | 印刷 | サポートなしで印刷できる | analysis のオーバーハング面積 |
+| R1 | dimension | Overall size about 80 W × 90 D × 100 H mm (±5 mm) | Measure the bounding box with measure |
+| R2 | function | Holds a 12 mm thick phone (with case) upright | Gap between backrest and front lip ≥ 14 mm |
+| R3 | printing | Prints without supports | Overhang area in analysis |
 
-## 部位と方向の決まり
-- 座標系: 上 = +Z（Z=0 がベッド面）、正面（手前）= −Y、右 = +X、単位 mm
-- 正面とみなす面: <例: スマホを置く側>
+## Parts and directions
+- Coordinates: up = +Z (Z=0 is the bed), front = −Y, right = +X, millimeters
+- Face treated as the front: <e.g. the side where the phone sits>
 
-## ユーザー指摘の履歴
-<!-- ビューア確認やチャットでの指摘を、元の言葉＋対応づけた部位・方向・要件 ID で残す -->
-| 版 | 指摘（ユーザーの言葉） | 部位 / 方向 | 反映した要件 |
+## User feedback history
+<!-- Record feedback from the viewer check or chat: the user's own words + the mapped part, direction and requirement ID -->
+| Version | Feedback (user's words) | Part / direction | Requirement updated |
 |---|---|---|---|

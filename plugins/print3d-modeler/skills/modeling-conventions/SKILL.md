@@ -1,92 +1,99 @@
 ---
 name: modeling-conventions
 description: >
-  print3d-modeler の共通規約（座標系・方向の語彙・部位の命名・作業フォルダ構成・model.py と p3d ランタイムの使い方）。
-  3D プリント用モデルを設計・実装・レビューするとき、部位ラベルや「上・前・右」などの方向を解釈するときに参照する。
+  Shared conventions for print3d-modeler: coordinate system, direction vocabulary, part naming, working folder layout,
+  and how to use model.py and the p3d runtime. Refer to it when designing, implementing or reviewing a model for 3D printing,
+  and when interpreting part labels or directions such as "up", "front" or "right".
 user-invocable: false
 metadata:
   version: "0.1.0"
 ---
 
-# モデリング規約
+# Modeling conventions
 
-メイン・レビュアー・ビューア・ユーザーが同じ言葉で話すための決まり。ここに書いたことは変えない。
+Rules that let the main agent, the reviewers, the viewer and the user speak the same language. Do not change anything written here.
 
-## 座標系と方向（確定）
+## Coordinate system and directions (fixed)
 
-| 方向 | 軸 | 意味 |
+| Direction | Axis | Meaning |
 |---|---|---|
-| 上 / 下 | +Z / −Z | Z=0 がベッド面。上はベッドから離れる向き |
-| 前（手前・正面）/ 後（奥） | −Y / +Y | 正面は使う人から見える側 |
-| 右 / 左 | +X / −X | 正面から見たときの左右 |
+| up / down | +Z / −Z | Z=0 is the bed. Up points away from the bed |
+| front / back | −Y / +Y | The front is the side the user sees when using it |
+| right / left | +X / −X | Left and right as seen from the front |
 
-- 単位は mm。右手系。
-- モデルは **使うときの向き（設計姿勢）** で作る。ユーザーの「上に伸ばして」の「上」は常に設計姿勢の +Z。
-- 印刷の向きは別に、設計姿勢を X→Y→Z の順に回す角度（度）として持つ（`set_print_orientation`）。STL/3MF の最終出力にだけ適用する。
-- 指摘やレビューの `direction` は `"上(+Z)"` か `"+Z"` の形で書く。
+- Millimeters, right-handed.
+- Build the model **as it is used (design pose)**. When the user says "extend it up", "up" always means +Z in the design pose, whatever language they say it in.
+- Keep the print orientation separately, as angles (degrees) that rotate the design pose about X, then Y, then Z (`set_print_orientation`). It is applied only to the final STL/3MF.
+- Write `direction` in findings and reviews as `"up (+Z)"` or `"+Z"`. Translate the word when you show it to the user.
 
-## 部位の決まり
+## Parts
 
-- 部位 = ユーザーが指し示す単位。1 部位 = 1 ソリッド。
-- `id`: 英小文字のスラッグ（`base`, `handle_left`）。コード・レビュー・ファイル名で使う。
-- `label`: ユーザーに見せる日本語名（「台座」「左の取っ手」）。ビューアでは表示順に P1, P2… の短い番号も付く。
-- 穴・溝・切り欠きなど形を持たない場所は `add_feature`（場所ラベル）で名前を付ける。
-- `key_dims`: ユーザーが気にする主要寸法（例 `{"高さ": 100, "傾き": "後ろへ20°"}`）。ビューアとレビューに出る。
-- `requirements`: その部位が満たすべき要件 ID（spec.md の R 番号）。
-- 同じ `print_group` の部位は印刷時に 1 つに結合される。別々に印刷して組む部品は group を分ける。
-- `print_group` 1 つ = 1 オブジェクト。ビューアのパーツ一覧はオブジェクト > パーツのネスト式で、表示名は `set_object_label(group, label)` で付ける（省略時は group 名）。
+- A part = a unit the user points at. One part = one solid.
+- `id`: lowercase slug (`base`, `handle_left`). Used in code, reviews and file names. Always English.
+- `label`: the name shown to the user, in the user's language ("Base", "Left handle"). The viewer also adds short numbers P1, P2… in display order.
+- Name shapeless locations such as holes, grooves and cutouts with `add_feature` (location labels).
+- `key_dims`: the main dimensions the user cares about (e.g. `{"height": 100, "tilt": "20° backward"}`). Shown in the viewer and the reviews; write the names in the user's language.
+- `requirements`: requirement IDs (R numbers in spec.md) the part must satisfy.
+- Parts in the same `print_group` are fused into one piece for printing. Use separate groups for pieces printed separately and assembled.
+- One `print_group` = one object. The viewer's part list nests object > part; name objects with `set_object_label(group, label)` (defaults to the group name).
 
-## 作業フォルダ（モデル 1 つにつき 1 フォルダ）
+## Language
+
+- Talk to the user in the language they use. The title, labels, descriptions, `key_dims` names and object labels in model.py, and the user-facing files (spec.md, design.md, print-notes.md), use that language too.
+- `LabeledModel(..., lang=...)` sets the viewer UI language: `"ja"` (Japanese) or `"en"` (English; also use it for other languages). If omitted, it is Japanese when the labels contain Japanese and English otherwise.
+- Identifiers stay in English: ids, file names, JSON keys, requirement IDs, and the `## vN … step X` lines in history.md.
+
+## Working folder (one folder per model)
 
 ```
 print3d/
-├── printer.json             プリンタ設定（全モデル共通。モデルフォルダに置けばそちらが優先）
+├── printer.json             printer settings (shared by all models; one in a model folder takes priority)
 └── <model-slug>/
-    ├── spec.md              要件（R1…）・印刷環境・ユーザー指摘の履歴      … メインが書く
-    ├── design.md            部位分解・寸法・印刷の向きの理由              … メインが書く
-    ├── model.py             モデル生成コード                              … メインが書く
-    ├── history.md           版ごとの変更（resume が使う）                  … メインが書く
-    ├── print-notes.md       印刷メモ                                      … メインが書く（工程 7）
-    ├── parts.json           部位定義（id/label/anchor/key_dims/寸法/印刷向き）… model.py が生成
-    ├── analysis.json        印刷可能性の自動計測                          … model.py が生成
-    ├── viewer.html          確認用 3D ビューア（オフラインで開ける）        … model.py / p3d.viewer が生成
-    ├── reviews/iter-N-printability.json, iter-N-requirements.json         … メインがレビュー結果を保存
+    ├── spec.md              requirements (R1…), print environment, user feedback history  … written by the main agent
+    ├── design.md            part breakdown, dimensions, reasons for the print orientation … written by the main agent
+    ├── model.py             model code                                              … written by the main agent
+    ├── history.md           changes per version (used by resume)                    … written by the main agent
+    ├── print-notes.md       print notes                                             … written by the main agent (step 7)
+    ├── parts.json           part definitions (id/label/anchor/key_dims/size/print orientation/lang) … generated by model.py
+    ├── analysis.json        automatic printability measurements                    … generated by model.py
+    ├── viewer.html          3D viewer for checking (opens offline)                 … generated by model.py / p3d.viewer
+    ├── reviews/iter-N-printability.json, iter-N-requirements.json                 … review results saved by the main agent
     └── out/
-        ├── model.glb, model.stl, model.step   設計姿勢（GLB は部位別ノード・Z-up・extras.label_ja）
-        ├── parts/<id>.stl                      部位ごと（設計姿勢）
-        ├── print/<group>.stl                   印刷姿勢（ベッドに接地・group ごとに結合）
-        ├── parts.prev.json                     前の版の部位定義（requirements-reviewer が意図しない変更の検出に使う）
-        └── final/<model>.3mf, <model>_<group>.stl  最終出力（export）
+        ├── model.glb, model.stl, model.step   design pose (GLB has one node per part, Z-up, extras.label)
+        ├── parts/<id>.stl                      per part (design pose)
+        ├── print/<group>.stl                   print pose (on the bed, fused per group)
+        ├── parts.prev.json                     previous part definitions (requirements-reviewer uses it to spot unintended changes)
+        └── final/<model>.3mf, <model>_<group>.stl  final output (export)
 ```
 
-`parts.json` は model.py から生成されるので手で編集しない。部位名や寸法を変えるときは model.py を直して再実行する。
+`parts.json` is generated from model.py, so never edit it by hand. To change part names or dimensions, fix model.py and run it again.
 
-## p3d ランタイム（runtime ディレクトリ）
+## p3d runtime (runtime directory)
 
-| コマンド（`cd RT && PY -m …`） | 用途 |
+| Command (`cd RT && PY -m …`) | Purpose |
 |---|---|
-| `P3D_RUNTIME=RT PY model.py`（DIR で実行） | モデル生成 → parts.json / out / analysis.json / viewer.html を一括出力 |
-| `p3d.analyze DIR [--stdout]` | 印刷可能性の自動計測（水密・ボディ数・造形範囲・肉厚・オーバーハング・ブリッジ・接地と重心・クリアランス・向き候補） |
-| `p3d.measure DIR [--part id / --section z=30 / --distance a b / --ray x,y,z dx,dy,dz]` | 寸法の実測 |
-| `p3d.viewer DIR` | ビューアだけ作り直す（モデルは作り直さない） |
-| `p3d.export DIR` | 最終 STL/3MF を書き出し、印刷メモ用の事実を JSON で表示 |
-| `p3d.printer DIR` / `p3d.printer --presets` | 使われるプリンタ設定の確認／プリセット一覧 |
+| `P3D_RUNTIME=RT PY model.py` (run in DIR) | Build the model → writes parts.json / out / analysis.json / viewer.html at once |
+| `p3d.analyze DIR [--stdout]` | Automatic printability checks (watertight, body count, build volume, wall thickness, overhangs, bridges, bed contact and center of mass, clearance, alternative orientations) |
+| `p3d.measure DIR [--part id / --section z=30 / --distance a b / --ray x,y,z dx,dy,dz]` | Measure dimensions |
+| `p3d.viewer DIR [--lang en\|ja]` | Rebuild only the viewer (does not rebuild the model) |
+| `p3d.export DIR` | Write the final STL/3MF and print facts for the print notes as JSON |
+| `p3d.printer DIR` / `p3d.printer --presets` | Show the printer settings in use / list presets |
 
-## LabeledModel の API
+## LabeledModel API
 
 ```python
-m = LabeledModel("pen-stand", title="ペン立て")
+m = LabeledModel("pen-stand", title="Pen stand", lang="en")
 m.add_part(id, label, shape, color=None, description="", key_dims=None,
            requirements=None, anchor=None, print_group="main")
 m.add_feature(id, label, (x, y, z), description="", requirements=None)
-m.add_cut(shape, parts=None)            # 全部位（または指定部位）から削る
+m.add_cut(shape, parts=None)            # subtract from every part (or only the listed parts)
 m.set_print_orientation(rotation_deg=(rx, ry, rz), bed_face="…", group=None)
-m.set_object_label(group, label)        # オブジェクト（print_group）の表示名
+m.set_object_label(group, label)        # display name of an object (print_group)
 m.print_note = "…"
-result = m.build(__file__)              # 要約 JSON を返す
+result = m.build(__file__)              # returns a summary JSON
 ```
 
-`shape` は build123d の Part/Solid/Compound、manifold3d.Manifold、trimesh.Trimesh のどれでもよい（build123d を基本にする）。
-`anchor` を省くと部位の上寄りの表面にラベルが立つ（ビューアの部位ラベルは初期オフ。オンにしたとき見づらい位置なら指定する）。
+`shape` can be a build123d Part/Solid/Compound, a manifold3d.Manifold or a trimesh.Trimesh (prefer build123d).
+If `anchor` is omitted, the label stands on the upper surface of the part (part labels are off by default in the viewer; set it if the position is hard to read when turned on).
 
-build123d の書き方の要点は `references/build123d-cheatsheet.md`、parts.json の項目は `references/parts-schema.json`。
+See `references/build123d-cheatsheet.md` for build123d essentials and `references/parts-schema.json` for the parts.json fields.

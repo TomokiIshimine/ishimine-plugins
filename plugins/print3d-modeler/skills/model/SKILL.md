@@ -1,72 +1,83 @@
 ---
 name: model
 description: >
-  3D プリンタ（FDM）で印刷するモデルを、ユーザーと対話しながら新しく設計・作成するときに使う。
-  「3Dプリンタで○○を作りたい」「スマホスタンドのモデルを作って」「3Dプリント用のSTLを作って」
-  「部品を設計して印刷したい」「/print3d-modeler:model」などで起動する。ヒアリング → 設計 → Python（build123d）で実装
-  → 独立レビュー 2 種 → 3D ビューアでユーザー確認 → 印刷用 STL/3MF 出力までを一貫して進める。
-argument-hint: "[作りたいもの]"
+  Use when designing and creating a new model to print on an FDM 3D printer, working through it with the user.
+  Triggered by requests like "I want to 3D print a ...", "make a phone stand model", "make an STL for 3D printing",
+  "design a part I can print", or "/print3d-modeler:model". Runs the whole flow: hearing → design → implementation
+  in Python (build123d) → two independent reviews → user check in a 3D viewer → print-ready STL/3MF export.
+argument-hint: "[what to make]"
 metadata:
   version: "0.1.0"
 ---
 
-# 3D プリント用モデルの作成（入口）
+# Create a model for 3D printing (entry point)
 
-ユーザーの「こういうものを作りたい」を、FDM 3D プリンタでそのまま印刷できるファイルにする。
-対話・設計・実装・実行・出力はすべて自分（メイン）が行い、レビューだけを独立したサブエージェント 2 体に任せる。
+Turn the user's "I want to make something like this" into files they can print as is on an FDM 3D printer.
+You (the main agent) do the conversation, design, implementation, runs and export yourself. Only the reviews go to two independent subagents.
 
-作りたいもの（引数）: $ARGUMENTS
+What to make (argument): $ARGUMENTS
 
-## 最初に必ず読むもの
+## Read first
 
-- `modeling-conventions` スキル（座標系・部位命名・フォルダ構成・model.py の書き方）。座標系は **上 = +Z（Z=0 がベッド）、正面 = −Y、右 = +X、単位 mm** で固定。
-- 工程ごとの詳しい手順: `${CLAUDE_PLUGIN_ROOT}/skills/model/references/workflow.md`
-- ヒアリングの質問例: `${CLAUDE_PLUGIN_ROOT}/skills/model/references/hearing.md`
+- The `modeling-conventions` skill (coordinate system, part naming, folder layout, how to write model.py). The coordinate system is fixed: **up = +Z (Z=0 is the bed), front = −Y, right = +X, millimeters**.
+- Detailed steps for each stage: `${CLAUDE_PLUGIN_ROOT}/skills/model/references/workflow.md`
+- Sample hearing questions: `${CLAUDE_PLUGIN_ROOT}/skills/model/references/hearing.md`
 
-## 準備（最初の 1 回、ヒアリングと並行して）
+## Language
 
-1. Python 環境を用意する。初回は依存パッケージ（build123d ほか）のインストールに数分かかるので、Bash をバックグラウンドで実行し、終わるのを待たずにヒアリングを始める。
+These instructions are in English, but **talk to the user in the language they write in** (if they switch, switch with them). Use that language for everything the user sees:
+
+- Your messages and AskUserQuestion questions and options.
+- What the viewer shows: the model `title`, part `label`, `description`, `key_dims` names, object labels (`set_object_label`), and feature labels.
+- Files the user may open: `spec.md`, `design.md`, `print-notes.md`. Translate the template headings, but keep their structure.
+- **Viewer language:** pass `lang` to `LabeledModel` to match: `"ja"` for Japanese, `"en"` for English and for any other language (the viewer UI has English and Japanese; part labels still show in the user's language). If you leave it out, the viewer picks Japanese when the labels contain Japanese and English otherwise. `p3d.viewer DIR --lang ja|en` overrides it when rebuilding only the viewer.
+
+Keep identifiers in English in every language: part ids, file and folder names, JSON keys, requirement IDs (R1, R2…), and the `## vN (date) step X → step Y` header lines in `history.md`. Measurement output (`p3d.analyze`, `p3d.measure`) is in English; translate it when you relay it.
+
+## Setup (once, in parallel with the hearing)
+
+1. Prepare the Python environment. The first run spends a few minutes installing dependencies (build123d and others), so run Bash in the background and start the hearing without waiting.
 
    ```bash
    bash "${CLAUDE_PLUGIN_ROOT}/runtime/setup_env.sh"
    ```
 
-   `${CLAUDE_PLUGIN_ROOT}` が展開されない環境では `find / -name setup_env.sh -path "*print3d-modeler*" 2>/dev/null | head -1` で探す。
-   最後の行の JSON にある `python`（以下 PY）と `runtime`（以下 RT）を以降すべてのコマンドで使う。
-2. 作業フォルダを決める。ユーザーが選んだ（接続した）フォルダがあればその直下、無ければ出力用フォルダの直下に `print3d/<モデル名>/` を作る。モデル名は英小文字のスラッグ（例: `phone-stand`）。
+   If `${CLAUDE_PLUGIN_ROOT}` is not expanded, find it with `find / -name setup_env.sh -path "*print3d-modeler*" 2>/dev/null | head -1`.
+   Use `python` (PY below) and `runtime` (RT below) from the JSON on the last line in every later command.
+2. Choose the working folder. Create `print3d/<model-name>/` directly under the folder the user picked (connected), or under the output folder if there is none. The model name is a lowercase slug (for example `phone-stand`).
 
-## 工程と完了条件
+## Steps and when they are done
 
-| 工程 | やること | 完了条件 |
+| Step | What to do | Done when |
 |---|---|---|
-| 1. ヒアリング | 用途・大きさ・形・動き/組み合わせ・印刷環境を聞く | `spec.md`（要件 R1, R2…）と `print3d/printer.json` |
-| 2. 設計 | 部位分解・寸法・印刷の向きの候補を決め、要点を確認 | `design.md` と確認済みの部位リスト |
-| 3. 実装 | `model.py` を書く（部位ごとに `add_part`） | `model.py` |
-| 4. 実行・自己チェック | `P3D_RUNTIME=RT PY model.py` を実行し、明らかな失敗を自分で直す | `parts.json` `analysis.json` `out/` `viewer.html` |
-| 5. レビュー | 2 体のレビュアーを並列起動 → FAIL を直して再レビュー（最大 3 周） | `reviews/iter-N-*.json` |
-| 6. ユーザー確認 | ビューアを見てもらい、チャットで指示をもらう | 指摘を `spec.md` に追記（→ 工程 2 か 3 へ）／OK をもらう |
-| 7. 出力 | 印刷の向きで STL/3MF と印刷メモを書き出す | `out/final/*.3mf` `*.stl` `print-notes.md` |
+| 1. Hearing | Ask about purpose, size, shape, movement/assembly, and printing setup | `spec.md` (requirements R1, R2…) and `print3d/printer.json` exist |
+| 2. Design | Decide the parts, dimensions and candidate print orientations; confirm the key points | `design.md` and a confirmed part list |
+| 3. Implement | Write `model.py` (one `add_part` per part) | `model.py` exists |
+| 4. Run and self-check | Run `P3D_RUNTIME=RT PY model.py` and fix obvious failures yourself | `parts.json` `analysis.json` `out/` `viewer.html` exist |
+| 5. Review | Launch the two reviewers in parallel → fix FAILs and review again (up to 3 rounds) | `reviews/iter-N-*.json` |
+| 6. User check | Have the user look at the viewer and give instructions in chat | Feedback added to `spec.md` (→ back to step 2 or 3) / the user says OK |
+| 7. Export | Write STL/3MF in print orientation and the print notes | `out/final/*.3mf` `*.stl` `print-notes.md` |
 
-各工程の終わりに `history.md` へ 1〜3 行で記録する（`resume` が再開位置の判断に使う）。
+At the end of each step, record 1–3 lines in `history.md` (`resume` uses it to decide where to pick up).
 
-## 守るルール
+## Rules
 
-- **レビューを自分で兼ねない。** 工程 5 を通さずにユーザー確認（工程 6）や最終出力（工程 7）へ進まない。
-- レビュアーには会話の要約を渡さない。渡すのは絶対パス（モデルフォルダ、PY、RT）と周回番号だけ。根拠はすべて `spec.md` とファイルにある状態にしておく。
-- ユーザーへの質問は AskUserQuestion を使い、1 回に論点 1〜3 個、選択肢付きにする。専門用語には言い換えを添える（例: 「オーバーハング（下側が宙に浮いて、支え＝サポート材が必要になる部分）」）。
-- 印刷可能性と要望がぶつかったら（例: 希望の壁が薄すぎる）、勝手に決めず代替案を並べて選んでもらう。
-- ユーザーの指示は部位ラベル（`parts.json` の label）と方向（上下・前後・左右）に対応づけて `spec.md` に要件として追記してから直す。あいまいなら AskUserQuestion で聞き返す。
-- 方向は常に「使うときの向き」が基準。印刷の向きは `set_print_orientation` の回転として別に持つ。
-- ビューアを見せるときは、アーティファクトを作るツールが使えれば `viewer.html` の中身をそのままアーティファクトとして表示する（1 ファイルで完結しており、外部読み込みなしで動く）。あわせて必ずファイルへのリンクも示す（Cowork では `computer://<絶対パス>` 形式。ブラウザで開けばオフラインで動く）。
+- **Do not do the review yourself.** Never go to the user check (step 6) or the final export (step 7) without passing step 5.
+- Do not give the reviewers a summary of the conversation. Pass only absolute paths (model folder, PY, RT) and the round number. Keep every piece of evidence in `spec.md` and the files.
+- Ask the user with AskUserQuestion, 1–3 topics at a time, with options. Rephrase technical terms (for example: "overhang (a part whose underside hangs in the air and needs support material underneath)").
+- When printability and the user's wishes conflict (for example, the wall they want is too thin), do not decide alone. Lay out alternatives and let the user choose.
+- Map the user's instructions to part labels (`label` in `parts.json`) and directions (up/down, front/back, left/right), add them to `spec.md` as requirements, then make the change. If an instruction is ambiguous, ask back with AskUserQuestion.
+- Directions always refer to the model as used. The print orientation is kept separately as a rotation in `set_print_orientation`.
+- When showing the viewer, if a tool for creating artifacts is available, show the contents of `viewer.html` as an artifact as is (it is a single self-contained file that loads nothing external). Always also give a link to the file (in Cowork use the `computer://<absolute path>` form; it works offline when opened in a browser).
 
-## レビュー（工程 5）の起動方法
+## Launching the reviews (step 5)
 
-2 体を **同じメッセージ内で並列に** Agent ツールで起動する。
+Launch both with the Agent tool **in parallel, in the same message**.
 
-- `print3d-modeler:printability-reviewer` … 印刷できるか
-- `print3d-modeler:requirements-reviewer` … 要望を満たしているか
+- `print3d-modeler:printability-reviewer` … can it be printed?
+- `print3d-modeler:requirements-reviewer` … does it meet the requirements?
 
-プロンプトには次だけを書く（例）:
+The prompt contains only this (example):
 
 ```
 model_dir: /abs/path/print3d/phone-stand
@@ -75,16 +86,16 @@ runtime: /abs/path/print3d-modeler/runtime
 iteration: 1
 ```
 
-返ってきた JSON をそのまま `reviews/iter-<N>-printability.json` と `reviews/iter-<N>-requirements.json` に保存する。
-両方 PASS なら工程 6 へ。FAIL があれば指摘を直して再実行・再レビュー（N+1）。3 周しても残るものは、指摘・原因・選択肢をまとめて AskUserQuestion でユーザーに判断を仰ぐ。
-`requirements-reviewer` の `questions_for_user`（判定不能の要件）は、工程 6 で AskUserQuestion にして聞く。
+Save the returned JSON as is to `reviews/iter-<N>-printability.json` and `reviews/iter-<N>-requirements.json`.
+If both PASS, go to step 6. If anything FAILs, fix it, run again and review again (N+1). Anything still open after 3 rounds: summarize the finding, cause and options, and ask the user to decide with AskUserQuestion.
+Ask the `questions_for_user` from `requirements-reviewer` (requirements it could not judge) with AskUserQuestion in step 6.
 
-## ユーザー確認（工程 6）
+## User check (step 6)
 
-1. ビューア（工程 4 で生成済み。無ければ `cd RT && PY -m p3d.viewer <model_dir>`）を見せ、リンクを示す。使い方を 2〜3 行で添える（ドラッグで回転・ホイールで拡大縮小、パーツにカーソルを合わせると名前が出る、右上の「パーツ・表示」で表示切り替え、方向ラベルを使ってチャットで指示）。
-2. 確かめたい論点（レビューの `questions_for_user`、設計で迷った点）があれば、ビューアと同じメッセージで AskUserQuestion にして聞く（部位ラベルと方向を添える）。ビューアには質問を載せない。
-3. チャットの指示や回答を `spec.md` に要件として追記し、工程 2 か 3 に戻る。ユーザーが「OK」なら工程 7 へ。
+1. Show the viewer (already built in step 4; if missing, run `cd RT && PY -m p3d.viewer <model_dir>`) and give the link. Add 2–3 lines on how to use it (drag to rotate, wheel to zoom, hover a part to see its name, open the panel with the button at the top right to toggle what is shown, and use the direction labels to give instructions in chat). Use the button names as they appear in the viewer's language.
+2. If there are points to confirm (`questions_for_user` from the review, things you were unsure about in the design), ask them with AskUserQuestion in the same message as the viewer (include part labels and directions). Do not put questions in the viewer.
+3. Add the chat instructions and answers to `spec.md` as requirements and go back to step 2 or 3. If the user says OK, go to step 7.
 
-## 出力（工程 7）
+## Export (step 7)
 
-`export` スキルの手順に従う（`cd RT && PY -m p3d.export <model_dir>` → `print-notes.md` を書く → 3MF/STL と印刷メモをリンクで示す）。
+Follow the `export` skill (`cd RT && PY -m p3d.export <model_dir>` → write `print-notes.md` → share links to the 3MF/STL and print notes).
