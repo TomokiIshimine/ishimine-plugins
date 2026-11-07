@@ -3,12 +3,13 @@
 [English](README.md) | 日本語
 
 「こういうものを 3D プリンタで作りたい」と伝えると、Claude が対話しながら 3D モデルを一緒に設計するプラグインです。
+**Blender などのモデリングソフトは不要**で、操作を覚える必要もありません。作りたいものを言葉で伝えるだけです。
 大きさや形を質問しながら Python（build123d）でモデルを作り、独立した 2 体のレビュアーにチェックさせてから、3D ビューアで見せます。
-納得できたら、**印刷の向きに置いた 3MF / STL** が手に入ります。スライサーに読み込んで、そのまま FDM 3D プリンタで印刷できます。
+納得できたら、**印刷の向きに置いた 3MF / STL** が手に入ります。スライサーに読み込めば、Bambu Lab A1 mini などのプリンタでそのまま印刷できます。
 
-Claude デスクトップアプリの Cowork で動かす前提で作っています（Claude Code でも動きます）。
+Claude デスクトップアプリの Cowork で動かす前提で作っています（Claude Code でも動きます）。claude.ai のチャットには対応していません（[使えるアプリ](#使えるアプリ)）。
 
-![3D ビューア：8 つの部位に名前がついた小さな家（部位ラベル・方向ラベル・パーツパネルを表示）](../../docs/images/print3d-modeler/ja/viewer-overview.png)
+![3D ビューア：8 つの部位に名前がついた小さな家（部位ラベル・方向ラベル・パーツパネルを表示）](docs/images/ja/viewer-overview.png)
 
 ## できること
 
@@ -26,7 +27,25 @@ Claude デスクトップアプリの Cowork で動かす前提で作ってい�
 /plugin install print3d-modeler@ishimine-plugins
 ```
 
-あとは「3D プリンタでスマホスタンドを作りたい」のように頼むだけです。
+あとは自分の言葉で頼むだけです。頼み方は[使い方の例](#使い方の例)を参考にしてください。
+
+## 使えるアプリ
+
+| アプリ | 対応 | 補足 |
+|---|---|---|
+| Cowork（Claude デスクトップアプリ） | 対応 | 主な対象。手元のコンピュータの Python 環境で動きます |
+| Claude Code | 対応 | ターミナル、IDE 拡張、デスクトップアプリの Code タブ |
+| claude.ai のチャット（Web・デスクトップ・モバイル） | 非対応 | チャットではプラグインのサブエージェントが読み込まれずレビュー工程が動かないうえ、ランタイムを動かす手元の Python 環境もありません |
+
+## 使い方の例
+
+次のように話しかけて始めます。Claude は作り始める前に質問をしてきます。
+
+- 「横向きのスマホを動画が見やすい角度で立てられるスタンドを 3D プリンタで作りたい」
+- 「机に置くヘッドホンスタンドを作って。Bambu Lab A1 mini でサポートなしで印刷したい」
+- 「小物入れにする、入れ子になる 3 つのフタ付きの箱を作って。一番大きいのは幅 100 mm くらい」
+- 「煙突と窓のある高さ 60 mm くらいの小さな家を、机の飾りとして作って」
+- 1 版目を見たあとに：「背もたれを 20 mm 高くして、ケーブル穴を左に寄せて」
 
 ## モデルができるまで
 
@@ -49,7 +68,7 @@ OK が出るまで 2〜5 を繰り返します。途中経過はすべて作業�
 
 **どの部位が何という名前かわかります。** パーツにカーソルを合わせると、名前・説明・主な寸法が出ます。部位ラベル（P1 土台、P2 壁、P3 屋根…）と方向ラベル（上下・前後・左右）が、そのままチャットで使う言葉になります。方向ラベルには軸（前 −Y、右 +X、上 +Z）も添えてあります。左下の枠には、モデル名・外形寸法・パーツ数がいつも表示されます。
 
-![煙突にカーソルを合わせると名前・説明・外形が出る](../../docs/images/print3d-modeler/ja/viewer-hover.png)
+![煙突にカーソルを合わせると名前・説明・外形が出る](docs/images/ja/viewer-hover.png)
 
 **表示を切り替えて、いろいろな観点で確かめられます。** 右上のボタン（または P キー）で開くパネルで、次のことができます。
 
@@ -60,7 +79,7 @@ OK が出るまで 2〜5 を繰り返します。途中経過はすべて作業�
 
 下の家は、軒・ひさし・窓枠の下面を斜めにしてあるので、サポートが要る面（赤）が無く、そのまま印刷できます。
 
-![印刷の向きでサポート判定をオンにした状態：軒・ひさし・窓枠の下面を斜めにしてあるので、赤い面が無い](../../docs/images/print3d-modeler/ja/viewer-print.png)
+![印刷の向きでサポート判定をオンにした状態：軒・ひさし・窓枠の下面を斜めにしてあるので、赤い面が無い](docs/images/ja/viewer-print.png)
 
 スマホでは 3D 表示が画面いっぱいになり、ボタンはアイコンに、パネルは下から出るシートになります。パーツをタップすると名前が出ます。
 
@@ -130,4 +149,33 @@ print3d-modeler/
 └── runtime/           setup_env.sh, requirements.txt, p3d/（Python ライブラリ）, viewer/（テンプレートと three.js）
 ```
 
-three.js（MIT License）を `runtime/viewer/vendor/` に同梱しています。更新するときは `runtime/viewer/vendor/three-bundle.entry.js` を esbuild で `--bundle --minify --format=iife` して `three-bundle.js` を作り直します。
+## プライバシーと通信
+
+print3d-modeler にはサーバー・アカウント・API キー・テレメトリはありません。あなたや会話についてのデータを集めたり送ったりはしません。
+
+- **ダウンロードするもの**：初回と、`runtime/requirements.txt` が変わったときだけ、`runtime/setup_env.sh` が `pip` で build123d・trimesh・manifold3d とその依存パッケージを PyPI（pypi.org と files.pythonhosted.org）から取得します。それ以外にネットワークから取得するものはありません。
+- **実行するもの**：`setup_env.sh`（仮想環境を作ってパッケージを入れる）、Claude がモデルごとに書く `model.py`、プラグイン自身の Python モジュール（`python -m p3d.…`）。どれも手元で動きます。
+- **書き込む場所**：モデルは選んだフォルダの下の `print3d/` に保存します。Python 環境は `$CLAUDE_PLUGIN_DATA`、未設定なら `~/.print3d-modeler/` に作ります。それ以外の場所には書き込みません。
+- **ビューア**：`viewer.html` はネットワークから何も読み込みません。Claude がアーティファクトとして表示した場合、そのファイル（モデルの形と部位名）は他のアーティファクトと同じくあなたの Claude アカウントに保存されます。避けたい場合はそう伝えて、手元のファイルをブラウザで開いてください。
+
+## 困ったとき
+
+| 症状 | 対処 |
+|---|---|
+| 「Python 3.10 or later was not found」と出る | Python 3.10 以上（python.org、Homebrew、パッケージマネージャなど）を入れて、新しいセッションで始め直す |
+| 初回のパッケージのインストールで失敗する | pypi.org につながるか確認し（プロキシやファイアウォールで止められていることがあります）、Claude にセットアップのやり直しを頼む。何度も失敗するときは下の仮想環境を消してやり直す |
+| 更新のあとパッケージがおかしい | `$CLAUDE_PLUGIN_DATA/venv`（または `~/.print3d-modeler/venv`）を消す。次の実行で作り直されます |
+| ビューアがアーティファクトとして開かない | モデルのフォルダにある `viewer.html` を Chrome・Edge・Safari・Firefox で開く。オフラインでも動きます |
+| プリンタに収まらない | 機種か造形範囲を伝え（`/print3d-modeler:printer`）、モデルを確認し直すよう頼む |
+| 前に作りかけたモデルを続けたい | 「前のモデルの続き」と頼むか `/print3d-modeler:resume` |
+
+## サポート
+
+- 質問・不具合の報告・要望：[GitHub Issues](https://github.com/TomokiIshimine/ishimine-plugins/issues)
+- セキュリティの問題：公開の Issue ではなく、リポジトリの [Security タブ](https://github.com/TomokiIshimine/ishimine-plugins/security) の **Report a vulnerability** から非公開で報告してください。
+
+## ライセンス
+
+MIT License（[LICENSE](LICENSE)）。
+
+ビューアをオフラインで動かすため、three.js（MIT License、r160）を `runtime/viewer/vendor/` に同梱しています。`three-bundle.js` は手書きではなく生成物です。npm パッケージ `three@0.160` を `three-bundle.entry.js` から esbuild で `--bundle --minify --format=iife` してまとめたもので、中身は three.js・`OrbitControls`・`CSS2DRenderer` だけです。更新するときは同じコマンドでそのエントリーファイルからまとめ直します。ライセンスは同じフォルダの `THREE_LICENSE.txt` にあります。

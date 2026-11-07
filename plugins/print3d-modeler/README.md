@@ -3,12 +3,13 @@
 English | [日本語](README.ja.md)
 
 Tell Claude what you want to make with your 3D printer, and it designs the model with you through conversation.
+**No Blender or other modeling software needed**, and nothing new to learn: you just describe what you want.
 Claude asks about size and shape, writes the model in Python (build123d), has it checked by two independent reviewers, and shows it to you in a 3D viewer.
-When you are happy with it, you get **3MF / STL files placed in print orientation, ready to slice and print on an FDM 3D printer**.
+When you are happy with it, you get **3MF / STL files placed in print orientation**. Open them in your slicer and print them on a printer such as the Bambu Lab A1 mini.
 
-Built for Cowork in the Claude desktop app. It also works in Claude Code.
+Built for Cowork in the Claude desktop app. It also works in Claude Code. It does not support chat on claude.ai (see [Where it works](#where-it-works)).
 
-![The 3D viewer: a small house with eight named parts, direction labels and the parts panel](../../docs/images/print3d-modeler/en/viewer-overview.png)
+![The 3D viewer: a small house with eight named parts, direction labels and the parts panel](docs/images/en/viewer-overview.png)
 
 ## What it does
 
@@ -26,7 +27,25 @@ Built for Cowork in the Claude desktop app. It also works in Claude Code.
 /plugin install print3d-modeler@ishimine-plugins
 ```
 
-Then just ask, for example: "I want to 3D print a phone stand".
+Then just ask in your own words. See [Examples](#examples) for ideas.
+
+## Where it works
+
+| App | Supported | Notes |
+|---|---|---|
+| Cowork (Claude desktop app) | Yes | The main target. Runs on your computer with a local Python environment |
+| Claude Code | Yes | Terminal, IDE extensions and the desktop app's Code tab |
+| Chat on claude.ai (web, desktop, mobile) | No | Chat does not load plugin subagents, so the review step cannot run, and it has no local Python environment for the runtime |
+
+## Examples
+
+Start a conversation with a request like one of these. Claude asks follow-up questions before it builds anything.
+
+- "I want to 3D print a phone stand that holds my phone in landscape at a comfortable angle for watching videos."
+- "Make a headphone stand for my desk. It should print without supports on a Bambu Lab A1 mini."
+- "Design a set of three nesting boxes with lids for small parts, the largest about 100 mm wide."
+- "Make a small house model about 60 mm tall with a chimney and windows, as a desk ornament."
+- After the first version: "Make the backrest 20 mm taller and move the cable hole to the left."
 
 ## How a model is made
 
@@ -49,7 +68,7 @@ The viewer is how you check the model and tell Claude what to change. It is one 
 
 **Know what every part is called.** Hover over a part to see its name, description and key dimensions. Part labels (P1 Base, P2 Walls, P3 Roof…) and the direction labels (up/down, front/back, left/right) give you the words to use in chat; each direction label also shows its axis (front −Y, right +X, up +Z). The box at the bottom left keeps the model name, overall size and part count in view.
 
-![Hovering the chimney shows its name, description and size](../../docs/images/print3d-modeler/en/viewer-hover.png)
+![Hovering the chimney shows its name, description and size](docs/images/en/viewer-hover.png)
 
 **Switch views to check different things.** The panel at the top right (or the P key) lets you:
 
@@ -60,7 +79,7 @@ The viewer is how you check the model and tell Claude what to change. It is one 
 
 In the house below, the eaves, the door canopy and the window frames are shaped with sloped undersides, so no face is flagged as needing support and it prints as is.
 
-![Print orientation with the support check on: the eaves, door canopy and window frames have sloped undersides, so nothing is flagged red](../../docs/images/print3d-modeler/en/viewer-print.png)
+![Print orientation with the support check on: the eaves, door canopy and window frames have sloped undersides, so nothing is flagged red](docs/images/en/viewer-print.png)
 
 On a phone, the 3D view fills the screen, the buttons become icons, the panel slides up from the bottom, and tapping a part shows its name.
 
@@ -130,4 +149,33 @@ print3d-modeler/
 └── runtime/           setup_env.sh, requirements.txt, p3d/ (Python library), viewer/ (template and three.js)
 ```
 
-three.js (MIT License) is bundled in `runtime/viewer/vendor/`. To update it, bundle `runtime/viewer/vendor/three-bundle.entry.js` with esbuild (`--bundle --minify --format=iife`) to regenerate `three-bundle.js`.
+## Privacy and network
+
+print3d-modeler has no server, account, API key or telemetry. It does not collect or send any data about you or your conversations.
+
+- **What it downloads.** On first run, and again only when `runtime/requirements.txt` changes, `runtime/setup_env.sh` runs `pip` to download build123d, trimesh, manifold3d and their dependencies from PyPI (pypi.org and files.pythonhosted.org). Nothing else is fetched from the network.
+- **What it runs.** `setup_env.sh` (creates the virtual environment and installs the packages), the `model.py` that Claude writes for your model, and the plugin's own Python modules (`python -m p3d.…`). All of them run locally.
+- **Where it writes.** Your models go in `print3d/` under the folder you choose. The Python environment goes in `$CLAUDE_PLUGIN_DATA`, or `~/.print3d-modeler/` when that is not set. Nothing is written anywhere else.
+- **The viewer.** `viewer.html` loads nothing from the network. When Claude shows it as an artifact, the file (the model's shape and part names) is stored in your Claude account like any other artifact. Ask Claude not to, and open the local file in your browser instead, if you prefer.
+
+## Troubleshooting
+
+| Problem | What to do |
+|---|---|
+| "Python 3.10 or later was not found" | Install Python 3.10 or later (python.org, Homebrew, or your package manager) and start a new session |
+| The first run fails while installing packages | Check that pypi.org is reachable (a proxy or firewall may block it), then ask Claude to run the setup again. If it keeps failing, delete the virtual environment (below) and retry |
+| Packages are broken after an update | Delete `$CLAUDE_PLUGIN_DATA/venv` (or `~/.print3d-modeler/venv`). It is recreated on the next run |
+| The viewer does not open as an artifact | Open `viewer.html` from the model's folder in Chrome, Edge, Safari or Firefox. It works offline |
+| The model does not fit your printer | Tell Claude your printer model or build volume (`/print3d-modeler:printer`), then ask it to check the model again |
+| You want to continue an earlier model | Ask "continue the model from earlier" or run `/print3d-modeler:resume` |
+
+## Support
+
+- Questions, bug reports and feature requests: [GitHub Issues](https://github.com/TomokiIshimine/ishimine-plugins/issues).
+- Security problems: report them privately with **Report a vulnerability** on the repository's [Security tab](https://github.com/TomokiIshimine/ishimine-plugins/security), not in a public issue.
+
+## License
+
+MIT License (see [LICENSE](LICENSE)).
+
+three.js (MIT License, r160) is bundled in `runtime/viewer/vendor/` so that the viewer works offline. `three-bundle.js` is generated, not hand-written: it is the npm package `three@0.160` bundled by esbuild from `three-bundle.entry.js` with `--bundle --minify --format=iife`, and contains only three.js, `OrbitControls` and `CSS2DRenderer`. To update it, run the same command on that entry file. Its license is in `THREE_LICENSE.txt` next to it.
