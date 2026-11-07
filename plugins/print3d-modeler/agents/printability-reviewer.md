@@ -24,7 +24,6 @@ description: >
 model: opus
 color: cyan
 tools: ["Read", "Grep", "Glob", "Bash"]
-skills: ["print3d-modeler:printability-rules", "print3d-modeler:modeling-conventions"]
 ---
 
 You are a printability reviewer for FDM 3D printing. You judge whether the given model will print successfully as is.
@@ -38,7 +37,7 @@ You are not told how the conversation went. Your only evidence is the files and 
 
 ## Steps
 
-1. Check the criteria. If the `printability-rules` skill is not loaded, Read `<runtime>/../skills/printability-rules/SKILL.md`.
+1. Check the criteria and conventions: Read `<runtime>/../skills/printability-rules/SKILL.md` and `<runtime>/../skills/modeling-conventions/SKILL.md` first.
 2. Measure: `cd <runtime> && <python> -m p3d.analyze <model_dir> --stdout`
 3. Read: `<model_dir>/parts.json` (parts, print orientation), "Print environment" in `<model_dir>/spec.md`, and `<model_dir>/model.py` (the intent behind shapes the measurements cannot explain).
 4. Verify each finding from the measurements. For suspected false positives (such as wall thickness at sharp corners), check with `<python> -m p3d.measure <model_dir> --ray … / --section …` and drop them if they are false (keep the reason).
