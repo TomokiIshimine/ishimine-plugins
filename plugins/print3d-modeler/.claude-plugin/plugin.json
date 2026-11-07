@@ -16,5 +16,9 @@
   ],
   "homepage": "https://github.com/TomokiIshimine/ishimine-plugins/tree/main/plugins/print3d-modeler",
   "repository": "https://github.com/TomokiIshimine/ishimine-plugins",
+  "documentationUrl": "https://github.com/TomokiIshimine/ishimine-plugins/blob/main/plugins/print3d-modeler/README.md",
+  "supportUrl": "https://github.com/TomokiIshimine/ishimine-plugins/issues",
+  "privacyPolicyUrl": "https://github.com/TomokiIshimine/ishimine-plugins/blob/main/plugins/print3d-modeler/PRIVACY.md",
+  "termsOfServiceUrl": "https://github.com/TomokiIshimine/ishimine-plugins/blob/main/plugins/print3d-modeler/LICENSE",
   "license": "MIT"
 }
