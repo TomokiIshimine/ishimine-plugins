@@ -79,7 +79,7 @@ print3d/
 | `p3d.export DIR` | Write the final STL/3MF and print facts for the print notes as JSON |
 | `p3d.printer DIR` / `p3d.printer --presets` | Show the printer settings in use / list presets |
 
-model.py imports `p3d` from `PYTHONPATH` and never reads environment variables. A model.py made before version 0.5.3 still reads `P3D_RUNTIME` (a `sys.path.insert(0, os.environ…)` line near the top): run it as `PYTHONPATH=RT P3D_RUNTIME=RT PY model.py`, or delete that line when you next edit the file.
+model.py imports `p3d` from `PYTHONPATH`. A model.py made before version 0.5.3 has an extra `sys.path.insert(…)` line just above its imports: delete that line, then run it as above.
 
 ## LabeledModel API
 

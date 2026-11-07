@@ -135,7 +135,7 @@ The viewer UI is available in **English and Japanese**. Claude picks the one tha
 ## Requirements
 
 - Python 3.10 or later, and network access to PyPI on first run.
-  On first run it installs build123d, trimesh, manifold3d and others into a virtual environment (`$CLAUDE_PLUGIN_DATA` or `~/.print3d-modeler/venv`). This takes a few minutes.
+  On first run it installs build123d, trimesh, manifold3d and others into a virtual environment (in the plugin's data folder that Claude Code provides, or `~/.print3d-modeler/venv`). This takes a few minutes.
 - A recent Chrome, Edge, Safari or Firefox to open the viewer.
 
 ## Layout
@@ -155,7 +155,7 @@ print3d-modeler has no server, account, API key or telemetry. It does not collec
 
 - **What it downloads.** On first run, and again only when `runtime/requirements.txt` changes, `runtime/setup_env.sh` runs `pip` to download build123d, trimesh, manifold3d and their dependencies from PyPI (pypi.org and files.pythonhosted.org). Nothing else is fetched from the network.
 - **What it runs.** `setup_env.sh` (creates the virtual environment and installs the packages), the `model.py` that Claude writes for your model, and the plugin's own Python modules (`python -m p3d.…`). All of them run locally.
-- **Where it writes.** Your models go in `print3d/` under the folder you choose. The Python environment goes in `$CLAUDE_PLUGIN_DATA`, or `~/.print3d-modeler/` when that is not set. Nothing is written anywhere else.
+- **Where it writes.** Your models go in `print3d/` under the folder you choose. The Python environment goes in the plugin's data folder that Claude Code provides, or `~/.print3d-modeler/` when there is none. Nothing is written anywhere else.
 - **The viewer.** `viewer.html` loads nothing from the network. When Claude shows it as an artifact, the file (the model's shape and part names) is stored in your Claude account like any other artifact. Ask Claude not to, and open the local file in your browser instead, if you prefer.
 
 ## Troubleshooting
@@ -164,7 +164,7 @@ print3d-modeler has no server, account, API key or telemetry. It does not collec
 |---|---|
 | "Python 3.10 or later was not found" | Install Python 3.10 or later (python.org, Homebrew, or your package manager) and start a new session |
 | The first run fails while installing packages | Check that pypi.org is reachable (a proxy or firewall may block it), then ask Claude to run the setup again. If it keeps failing, delete the virtual environment (below) and retry |
-| Packages are broken after an update | Delete `$CLAUDE_PLUGIN_DATA/venv` (or `~/.print3d-modeler/venv`). It is recreated on the next run |
+| Packages are broken after an update | Delete the `venv` folder in the plugin's data folder (or `~/.print3d-modeler/venv`). It is recreated on the next run |
 | The viewer does not open as an artifact | Open `viewer.html` from the model's folder in Chrome, Edge, Safari or Firefox. It works offline |
 | The model does not fit your printer | Tell Claude your printer model or build volume (`/print3d-modeler:printer`), then ask it to check the model again |
 | You want to continue an earlier model | Ask "continue the model from earlier" or run `/print3d-modeler:resume` |
