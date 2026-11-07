@@ -151,7 +151,7 @@ print3d-modeler/
 
 ## プライバシーと通信
 
-print3d-modeler にはサーバー・アカウント・API キー・テレメトリはありません。あなたや会話についてのデータを集めたり送ったりはしません。
+print3d-modeler にはサーバー・アカウント・API キー・テレメトリはありません。あなたや会話についてのデータを集めたり送ったりはしません。全文は [PRIVACY.md](PRIVACY.md) にあります。
 
 - **ダウンロードするもの**：初回と、`runtime/requirements.txt` が変わったときだけ、`runtime/setup_env.sh` が `pip` で build123d・trimesh・manifold3d とその依存パッケージを PyPI（pypi.org と files.pythonhosted.org）から取得します。それ以外にネットワークから取得するものはありません。
 - **実行するもの**：`setup_env.sh`（仮想環境を作ってパッケージを入れる）、Claude がモデルごとに書く `model.py`、プラグイン自身の Python モジュール（`python -m p3d.…`）。どれも手元で動きます。

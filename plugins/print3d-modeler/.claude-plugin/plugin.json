@@ -1,6 +1,6 @@
 {
   "name": "print3d-modeler",
-  "version": "0.5.5",
+  "version": "0.5.6",
   "description": "Design 3D-printable models just by talking with Claude, with no Blender or other modeling software needed. Claude builds them in Python (build123d), checks them with independent printability and requirements reviews, shows them in a 3D viewer, and exports print-ready STL / 3MF for FDM printers such as the Bambu Lab A1 mini.",
   "author": {
     "name": "Tomoki Ishimine",
@@ -16,5 +16,9 @@
   ],
   "homepage": "https://github.com/TomokiIshimine/ishimine-plugins/tree/main/plugins/print3d-modeler",
   "repository": "https://github.com/TomokiIshimine/ishimine-plugins",
+  "documentationUrl": "https://github.com/TomokiIshimine/ishimine-plugins/blob/main/plugins/print3d-modeler/README.md",
+  "supportUrl": "https://github.com/TomokiIshimine/ishimine-plugins/issues",
+  "privacyPolicyUrl": "https://github.com/TomokiIshimine/ishimine-plugins/blob/main/plugins/print3d-modeler/PRIVACY.md",
+  "termsOfServiceUrl": "https://github.com/TomokiIshimine/ishimine-plugins/blob/main/plugins/print3d-modeler/LICENSE",
   "license": "MIT"
 }

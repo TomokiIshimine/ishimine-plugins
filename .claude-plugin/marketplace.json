@@ -12,7 +12,7 @@
       "name": "print3d-modeler",
       "source": "./plugins/print3d-modeler",
       "description": "Design 3D-printable models just by talking with Claude, with no Blender or other modeling software needed. Claude builds them in Python (build123d), checks them with independent printability and requirements reviews, shows them in a 3D viewer, and exports print-ready STL / 3MF for FDM printers such as the Bambu Lab A1 mini.",
-      "version": "0.5.5",
+      "version": "0.5.6",
       "author": {
         "name": "Tomoki Ishimine"
       },
