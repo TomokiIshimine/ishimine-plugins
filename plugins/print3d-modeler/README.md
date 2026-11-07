@@ -3,8 +3,9 @@
 English | [日本語](README.ja.md)
 
 Tell Claude what you want to make with your 3D printer, and it designs the model with you through conversation.
+**No Blender or other modeling software needed**, and nothing new to learn: you just describe what you want.
 Claude asks about size and shape, writes the model in Python (build123d), has it checked by two independent reviewers, and shows it to you in a 3D viewer.
-When you are happy with it, you get **3MF / STL files placed in print orientation, ready to slice and print on an FDM 3D printer**.
+When you are happy with it, you get **3MF / STL files placed in print orientation**. Open them in your slicer and print them on a printer such as the Bambu Lab A1 mini.
 
 Built for Cowork in the Claude desktop app. It also works in Claude Code. It does not support chat on claude.ai (see [Where it works](#where-it-works)).
 
