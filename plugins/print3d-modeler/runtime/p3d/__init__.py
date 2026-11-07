@@ -15,7 +15,15 @@ Coordinate system (shared by everyone, never changes): millimeters, up = +Z (Z=0
 front = -Y, right = +X.
 """
 from .model import LabeledModel  # noqa: F401
-from .printer import load_printer, PRESETS  # noqa: F401
 from .meshutil import DIRECTION_LABELS  # noqa: F401
 
 __all__ = ["LabeledModel", "load_printer", "PRESETS", "DIRECTION_LABELS"]
+
+
+def __getattr__(name):
+    # Load p3d.printer only when asked for, so `python -m p3d.printer` does not find it already
+    # imported by the package (runpy then prints a RuntimeWarning).
+    if name in ("load_printer", "PRESETS"):
+        from . import printer
+        return getattr(printer, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
