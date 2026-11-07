@@ -16,7 +16,9 @@ See the [plugin README](plugins/print3d-modeler/) for the workflow, viewer featu
 
 ## Install
 
-Add the marketplace, then install the plugin:
+In the Claude desktop app, open **Customize** in the left sidebar and go to the **Plugins** tab (in Cowork, open the **Cowork** tab first). Choose **Add** → **Add marketplace** → **Add from a repository**, enter `TomokiIshimine/ishimine-plugins`, then pick print3d-modeler from the list and add it. See the [plugin README](plugins/print3d-modeler/#install) for the steps and the official help.
+
+In Claude Code, add the marketplace, then install the plugin:
 
 ```
 /plugin marketplace add TomokiIshimine/ishimine-plugins

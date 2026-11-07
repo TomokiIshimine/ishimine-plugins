@@ -16,7 +16,9 @@ Claude Code / Cowork 用のプラグインマーケットプレイスです。
 
 ## インストール
 
-マーケットプレイスを追加してから、プラグインを入れます。
+Claude デスクトップアプリでは、左側のサイドバーで「カスタマイズ」を開いて「プラグイン」タブに移動し（Cowork では先に「Cowork」タブを開きます）、「追加」→「マーケットプレイスを追加」→「リポジトリから追加」を選んで `TomokiIshimine/ishimine-plugins` を入力します。あとは一覧から print3d-modeler を選んで「追加」します。手順と公式ヘルプは [プラグインの README](plugins/print3d-modeler/README.ja.md#インストール) にあります。
+
+Claude Code では、マーケットプレイスを追加してから、プラグインを入れます。
 
 ```
 /plugin marketplace add TomokiIshimine/ishimine-plugins

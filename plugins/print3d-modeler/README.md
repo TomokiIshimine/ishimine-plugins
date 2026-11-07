@@ -7,7 +7,7 @@ Tell Claude what you want to make with your 3D printer, and it designs the model
 Claude asks about size and shape, writes the model in Python (build123d), has it checked by two independent reviewers, and shows it to you in a 3D viewer.
 When you are happy with it, you get **3MF / STL files placed in print orientation**. Open them in your slicer and print them on a printer such as the Bambu Lab A1 mini.
 
-Built for Cowork in the Claude desktop app. It also works in Claude Code. It does not support chat on claude.ai (see [Where it works](#where-it-works)).
+Built for Cowork in the Claude app (desktop and phone). It also works in Claude Code. It does not support the chat screen on claude.ai (web, desktop, mobile) (see [Where it works](#where-it-works)).
 
 ![The 3D viewer: a small house with eight named parts, direction labels and the parts panel](docs/images/en/viewer-overview.png)
 
@@ -22,6 +22,16 @@ Built for Cowork in the Claude desktop app. It also works in Claude Code. It doe
 
 ## Install
 
+You can install it from the screens of the Claude desktop app (official help: [Use plugins in Claude](https://support.claude.com/en/articles/13837440-use-plugins-in-claude)).
+
+1. In the left sidebar, open **Customize** and go to the **Plugins** tab.
+   In Cowork, open the **Cowork** tab first, then open **Customize**.
+2. Choose **Add**, then **Add marketplace**.
+3. Choose **Add from a repository** and enter `TomokiIshimine/ishimine-plugins`.
+4. Pick print3d-modeler from the marketplace's list and add it.
+
+To install it in Claude Code, run these two lines:
+
 ```
 /plugin marketplace add TomokiIshimine/ishimine-plugins
 /plugin install print3d-modeler@ishimine-plugins
@@ -33,9 +43,9 @@ Then just ask in your own words. See [Examples](#examples) for ideas.
 
 | App | Supported | Notes |
 |---|---|---|
-| Cowork (Claude desktop app) | Yes | The main target. Runs on your computer with a local Python environment |
-| Claude Code | Yes | Terminal, IDE extensions and the desktop app's Code tab |
-| Chat on claude.ai (web, desktop, mobile) | No | Chat does not load plugin subagents, so the review step cannot run, and it has no local Python environment for the runtime |
+| Cowork (Claude desktop app, Claude app on your phone) | Yes | The main target. Runs in an environment in Claude's cloud. Besides the desktop app, you can use it from Cowork in the Claude app on your phone (modeling from your phone works too) |
+| Claude Code | Yes | The desktop app's Code tab (recommended). The terminal and IDE extensions work too |
+| Chat on claude.ai (the chat screen on web, desktop, mobile) | No | The chat screen does not load plugin subagents, so the review step cannot run |
 
 ## Examples
 
@@ -62,7 +72,9 @@ Steps 2 to 5 repeat until you say it is good. Everything is saved to a working f
 
 ## The 3D viewer
 
-The viewer is how you check the model and tell Claude what to change. It is one self-contained HTML file (three.js embedded): it can be shown as an artifact, and it works offline when opened in a browser.
+The viewer is how you check the model and tell Claude what to change. Claude shows it as an artifact, so you normally look at it right inside Claude.
+
+Also: the viewer is one self-contained HTML file (`viewer.html` in the model's folder, three.js embedded), so it also works offline if you open the local file in a browser.
 
 **Look at any detail.** Drag to rotate, scroll to zoom toward the cursor, right-drag to pan, and double-click a point to rotate around it. The buttons at the top jump to front, back, left, right, top, bottom or an overview.
 
@@ -134,9 +146,12 @@ The viewer UI is available in **English and Japanese**. Claude picks the one tha
 
 ## Requirements
 
-- Python 3.10 or later, and network access to PyPI on first run.
-  On first run it installs build123d, trimesh, manifold3d and others into a virtual environment (in the plugin's data folder that Claude Code provides, or `~/.print3d-modeler/venv`). This takes a few minutes.
-- A recent Chrome, Edge, Safari or Firefox to open the viewer.
+- Just the Claude app (Cowork or Claude Code). Python is already installed in the environments in Claude's cloud, so **you do not need to set up Python on your computer** (if you run Claude Code on your own computer, see the note below).
+
+Also:
+
+- If you run Claude Code on your own computer (the terminal, IDE extensions, or the desktop app's Code tab with a local environment), it uses Python 3.10 or later on that computer. If none is found you see "Python 3.10 or later was not found"; only then do you need to install it (see [Troubleshooting](#troubleshooting)).
+- On first run only, it installs build123d, trimesh, manifold3d and others from PyPI into a virtual environment (in the plugin's data folder that Claude Code provides, or `~/.print3d-modeler/venv`). This takes a few minutes and needs network access to PyPI.
 
 ## Layout
 
@@ -154,18 +169,18 @@ print3d-modeler/
 print3d-modeler has no server, account, API key or telemetry. It does not collect or send any data about you or your conversations. The full policy is in [PRIVACY.md](PRIVACY.md).
 
 - **What it downloads.** On first run, and again only when `runtime/requirements.txt` changes, `runtime/setup_env.sh` runs `pip` to download build123d, trimesh, manifold3d and their dependencies from PyPI (pypi.org and files.pythonhosted.org). Nothing else is fetched from the network.
-- **What it runs.** `setup_env.sh` (creates the virtual environment and installs the packages), the `model.py` that Claude writes for your model, and the plugin's own Python modules (`python -m p3d.…`). All of them run locally.
-- **Where it writes.** Your models go in `print3d/` under the folder you choose. The Python environment goes in the plugin's data folder that Claude Code provides, or `~/.print3d-modeler/` when there is none. Nothing is written anywhere else.
-- **The viewer.** `viewer.html` loads nothing from the network. When Claude shows it as an artifact, the file (the model's shape and part names) is stored in your Claude account like any other artifact. Ask Claude not to, and open the local file in your browser instead, if you prefer.
+- **What it runs.** `setup_env.sh` (creates the virtual environment and installs the packages), the `model.py` that Claude writes for your model, and the plugin's own Python modules (`python -m p3d.…`). All of them run in the environment where Claude runs commands: in Cowork, an environment in Claude's cloud; in Claude Code on your own computer, that computer.
+- **Where it writes.** Your models go in `print3d/` under the folder you choose. The Python environment goes in the same environment, in the plugin's data folder that Claude Code provides, or `~/.print3d-modeler/` when there is none. Nothing is written anywhere else.
+- **The viewer.** `viewer.html` loads nothing from the network. When Claude shows it as an artifact, the file (the model's shape and part names) is stored in your Claude account like any other artifact. Ask Claude not to, and open the local `viewer.html` instead, if you prefer.
 
 ## Troubleshooting
 
 | Problem | What to do |
 |---|---|
-| "Python 3.10 or later was not found" | Install Python 3.10 or later (python.org, Homebrew, or your package manager) and start a new session |
+| "Python 3.10 or later was not found" (when using Claude Code on your own computer) | Install Python 3.10 or later on that computer (python.org, Homebrew, or your package manager) and start a new session. This does not normally happen in Cowork or in a cloud environment |
 | The first run fails while installing packages | Check that pypi.org is reachable (a proxy or firewall may block it), then ask Claude to run the setup again. If it keeps failing, delete the virtual environment (below) and retry |
 | Packages are broken after an update | Delete the `venv` folder in the plugin's data folder (or `~/.print3d-modeler/venv`). It is recreated on the next run |
-| The viewer does not open as an artifact | Open `viewer.html` from the model's folder in Chrome, Edge, Safari or Firefox. It works offline |
+| The viewer does not open as an artifact | Open the local `viewer.html` in the model's folder. It works offline |
 | The model does not fit your printer | Tell Claude your printer model or build volume (`/print3d-modeler:printer`), then ask it to check the model again |
 | You want to continue an earlier model | Ask "continue the model from earlier" or run `/print3d-modeler:resume` |
 
