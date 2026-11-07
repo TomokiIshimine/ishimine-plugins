@@ -14,10 +14,10 @@ skills/      model (entry), resume, view, review, export, printer, help    user-
 agents/      printability-reviewer, requirements-reviewer                  read-only, reply with JSON only
 runtime/     setup_env.sh, requirements.txt                                 venv in $CLAUDE_PLUGIN_DATA or ~/.print3d-modeler
              p3d/ model.py (LabeledModel), analyze.py, measure.py, export.py, printer.py, viewer.py, meshutil.py
-             viewer/viewer_template.html + vendor/three-bundle.js           single-file offline viewer (three.js inlined)
+             viewer/viewer_template.html + vendor/three-bundle.partNN.js    single-file offline viewer (three.js inlined)
 ```
 
-Python 3.10+, build123d (modeling), trimesh (measurement, GLB/STL), manifold3d (booleans). `model.py` finds the runtime through the `P3D_RUNTIME` environment variable.
+Python 3.10+, build123d (modeling), trimesh (measurement, GLB/STL), manifold3d (booleans). `model.py` finds the runtime through `PYTHONPATH` (`PYTHONPATH=RT PY model.py`) and must not read environment variables: the Anthropic directory scan holds plugins whose code reads values from the user's environment.
 
 ## Fixed conventions
 
@@ -59,7 +59,7 @@ Several files read each other's output. A change to one side without the other b
 
 ### Viewer
 
-- `viewer.html` must open offline as a single file and also render inside a claude.ai artifact. Flag any CDN `<script src>`, `importmap`, `import()` of a URL, `fetch` of a remote resource, or `data:` URL module import. three.js is inlined from `runtime/viewer/vendor/three-bundle.js`.
+- `viewer.html` must open offline as a single file and also render inside a claude.ai artifact. Flag any CDN `<script src>`, `importmap`, `import()` of a URL, `fetch` of a remote resource, or `data:` URL module import. three.js is inlined from `runtime/viewer/vendor/three-bundle.partNN.js`: one unminified esbuild bundle split into parts under 256 KiB (the Anthropic directory holds files over 256 KiB and minified code). Rebuild them only with `.github/scripts/build_three_bundle.py`; flag a hand edit, a minified part, or a part of 256 KiB or more.
 - Data embedded into the HTML must stay escaped: `viewer.py` replaces `</` in the model JSON and `</script` in the bundle. Flag removal of that escaping or new injection points that skip it, because part labels and descriptions are free text.
 - Every UI string goes through the `P3D_I18N` table and must exist in both `en` and `ja`. Flag hard-coded UI text, or a key added to only one language.
 - Turning the direction display off hides both the arrows and their labels; the 3D view is on the left and the side panel (closed by default) on the right. Flag changes that break these.

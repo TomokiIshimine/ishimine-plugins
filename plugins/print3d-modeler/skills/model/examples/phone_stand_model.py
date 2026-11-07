@@ -4,12 +4,9 @@ Parts: base / backrest / front lip / support rib; location label: cable slot.
 Labels here are in English (lang="en"). For a Japanese-speaking user, write them in Japanese and set lang="ja".
 """
 import math
-import os
-import sys
 
-sys.path.insert(0, os.environ.get("P3D_RUNTIME", ""))   # runtime path printed by setup_env.sh
-from build123d import Align, Box, Plane, Polygon, Pos, Rot, extrude  # noqa: E402
-from p3d import LabeledModel  # noqa: E402
+from build123d import Align, Box, Plane, Polygon, Pos, Rot, extrude
+from p3d import LabeledModel  # run as PYTHONPATH=<runtime> <python> model.py
 
 # ---- Parameters (values changed during the conversation; requirement IDs in comments) ----
 BASE_W, BASE_D, BASE_T = 80.0, 72.0, 6.0     # base width, depth, thickness       R1

@@ -178,4 +178,4 @@ print3d-modeler にはサーバー・アカウント・API キー・テレメト
 
 MIT License（[LICENSE](LICENSE)）。
 
-ビューアをオフラインで動かすため、three.js（MIT License、r160）を `runtime/viewer/vendor/` に同梱しています。`three-bundle.js` は手書きではなく生成物です。npm パッケージ `three@0.160` を `three-bundle.entry.js` から esbuild で `--bundle --minify --format=iife` してまとめたもので、中身は three.js・`OrbitControls`・`CSS2DRenderer` だけです。更新するときは同じコマンドでそのエントリーファイルからまとめ直します。ライセンスは同じフォルダの `THREE_LICENSE.txt` にあります。
+ビューアをオフラインで動かすため、three.js（MIT License、r160）を `runtime/viewer/vendor/` に同梱しています。`three-bundle.partNN.js` は手書きではなく生成物です。npm パッケージ `three@0.160.0` を `three-bundle.entry.js` から esbuild 0.24.2 で圧縮せずに 1 本の読めるスクリプトにまとめ（中身は three.js・`OrbitControls`・`CSS2DRenderer` だけ）、256 KiB 未満のファイルに分けたものです。ビューアは順に連結して使います。作り直すときはリポジトリの `.github/scripts/build_three_bundle.py` を実行します（`--check` で同梱分が新しくビルドしたものと一致するか確かめられます）。three.js のライセンスは同じフォルダの `THREE_LICENSE.txt` にあります。

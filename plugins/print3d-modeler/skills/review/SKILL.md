@@ -15,7 +15,7 @@ Target: $ARGUMENTS (defaults to the most recently updated model)
 
 1. Find the working folder (same as step 1 of the `resume` skill).
 2. Python environment: run `bash "${CLAUDE_PLUGIN_ROOT}/runtime/setup_env.sh"` and use `python` (PY) and `runtime` (RT) from the JSON on the last line (if the variable is not expanded, use `find / -name setup_env.sh -path "*print3d-modeler*" 2>/dev/null | head -1`).
-3. If model.py is newer than parts.json, first run `cd <model_dir> && P3D_RUNTIME=RT PY model.py`.
+3. If model.py is newer than parts.json, first run `cd <model_dir> && PYTHONPATH=RT PY model.py`.
 4. Decide the round number N: the highest number in `reviews/iter-*-*.json` + 1 (1 if none).
 5. Launch both with the Agent tool **in parallel, in the same message**. The prompt is only the absolute paths and the round number (no conversation summary):
    - `print3d-modeler:printability-reviewer`

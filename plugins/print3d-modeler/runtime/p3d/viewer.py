@@ -35,11 +35,16 @@ _JA_RE = re.compile(r"[぀-ヿ㐀-䶿一-鿿ｦ-ﾟ]")
 
 
 def three_bundle() -> str:
-    """three.js core + OrbitControls + CSS2DRenderer bundled into one script (vendor/three-bundle.js).
+    """three.js core + OrbitControls + CSS2DRenderer as one script, joined from vendor/three-bundle.partNN.js.
 
-    Built by running esbuild on vendor/three-bundle.entry.js with --bundle --minify --format=iife.
+    The parts are one unminified esbuild IIFE bundle of vendor/three-bundle.entry.js, split at line
+    boundaries so that every file stays readable and under 256 KiB. Rebuild them with
+    .github/scripts/build_three_bundle.py in the repository.
     """
-    js = (VENDOR / "three-bundle.js").read_text(encoding="utf-8")
+    parts = sorted(VENDOR.glob("three-bundle.part*.js"))
+    if not parts:
+        raise FileNotFoundError(f"three.js parts are missing from {VENDOR}")
+    js = "".join(p.read_text(encoding="utf-8") for p in parts)
     return js.replace("</script", "<\\/script")
 
 

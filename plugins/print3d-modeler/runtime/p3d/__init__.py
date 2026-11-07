@@ -1,8 +1,7 @@
 """Python runtime for print3d-modeler.
 
-Use it from the model script (model.py) like this:
+Use it from the model script (model.py), run as `PYTHONPATH=<runtime directory> <python> model.py`:
 
-    import sys; sys.path.insert(0, "<runtime directory>")
     from p3d import LabeledModel
     from build123d import *
 

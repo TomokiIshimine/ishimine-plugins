@@ -19,7 +19,7 @@ Target: $ARGUMENTS (defaults to the most recently updated model)
    ```bash
    cd RT && PY -m p3d.viewer <model_dir> --lang <en|ja>
    ```
-   If parts.json is missing or older than model.py, first run `cd <model_dir> && P3D_RUNTIME=RT PY model.py`.
+   If parts.json is missing or older than model.py, first run `cd <model_dir> && PYTHONPATH=RT PY model.py`.
    If the part labels are in a different language from the conversation, update the labels and `lang` in model.py and rerun it instead.
 4. If a tool for creating artifacts is available, show the contents of `viewer.html` as an artifact as is. Always also give a link to the file (in Cowork `computer://<absolute path>`; it works offline when opened in a browser).
 5. Add short usage notes in the user's language, using the button names as they appear in the viewer:

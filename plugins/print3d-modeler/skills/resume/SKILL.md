@@ -31,4 +31,4 @@ Talk to the user in their language. If the conversation language differs from th
    | Reviews PASS, waiting for the user check | Step 6 (rebuild the viewer and show it again) |
    | out/final exists | Done. Ask whether to make more changes or export again |
 5. Tell the user in 2–3 lines how far it got and what comes next, then continue with the matching step of the `model` skill (`${CLAUDE_PLUGIN_ROOT}/skills/model/SKILL.md` and `references/workflow.md`).
-6. Python paths can change between sessions. model.py receives the runtime through the `P3D_RUNTIME` environment variable, so always run it as `P3D_RUNTIME=RT PY model.py`.
+6. Python paths can change between sessions. model.py finds the runtime through `PYTHONPATH`, so always run it as `PYTHONPATH=RT PY model.py`. For a model.py made with an older version, see the note under "p3d runtime" in `modeling-conventions`.

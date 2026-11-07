@@ -72,12 +72,14 @@ print3d/
 
 | Command (`cd RT && PY -m …`) | Purpose |
 |---|---|
-| `P3D_RUNTIME=RT PY model.py` (run in DIR) | Build the model → writes parts.json / out / analysis.json / viewer.html at once |
+| `PYTHONPATH=RT PY model.py` (run in DIR) | Build the model → writes parts.json / out / analysis.json / viewer.html at once |
 | `p3d.analyze DIR [--stdout]` | Automatic printability checks (watertight, body count, build volume, wall thickness, overhangs, bridges, bed contact and center of mass, clearance, alternative orientations) |
 | `p3d.measure DIR [--part id / --section z=30 / --distance a b / --ray x,y,z dx,dy,dz]` | Measure dimensions |
 | `p3d.viewer DIR [--lang en\|ja]` | Rebuild only the viewer (does not rebuild the model) |
 | `p3d.export DIR` | Write the final STL/3MF and print facts for the print notes as JSON |
 | `p3d.printer DIR` / `p3d.printer --presets` | Show the printer settings in use / list presets |
+
+model.py imports `p3d` from `PYTHONPATH` and never reads environment variables. A model.py made before version 0.5.3 still reads `P3D_RUNTIME` (a `sys.path.insert(0, os.environ…)` line near the top): run it as `PYTHONPATH=RT P3D_RUNTIME=RT PY model.py`, or delete that line when you next edit the file.
 
 ## LabeledModel API
 
