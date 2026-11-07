@@ -135,7 +135,7 @@ print3d/
 ## 必要なもの
 
 - Python 3.10 以上と、PyPI からパッケージを入れられるネットワーク（初回のみ）。
-  初回に build123d・trimesh・manifold3d などを仮想環境（`$CLAUDE_PLUGIN_DATA` または `~/.print3d-modeler/venv`）へ自動で入れます。数分かかります。
+  初回に build123d・trimesh・manifold3d などを仮想環境（Claude Code が用意するプラグイン用のデータフォルダ、または `~/.print3d-modeler/venv`）へ自動で入れます。数分かかります。
 - ビューアを開くための最新の Chrome / Edge / Safari / Firefox。
 
 ## 構成
@@ -155,7 +155,7 @@ print3d-modeler にはサーバー・アカウント・API キー・テレメト
 
 - **ダウンロードするもの**：初回と、`runtime/requirements.txt` が変わったときだけ、`runtime/setup_env.sh` が `pip` で build123d・trimesh・manifold3d とその依存パッケージを PyPI（pypi.org と files.pythonhosted.org）から取得します。それ以外にネットワークから取得するものはありません。
 - **実行するもの**：`setup_env.sh`（仮想環境を作ってパッケージを入れる）、Claude がモデルごとに書く `model.py`、プラグイン自身の Python モジュール（`python -m p3d.…`）。どれも手元で動きます。
-- **書き込む場所**：モデルは選んだフォルダの下の `print3d/` に保存します。Python 環境は `$CLAUDE_PLUGIN_DATA`、未設定なら `~/.print3d-modeler/` に作ります。それ以外の場所には書き込みません。
+- **書き込む場所**：モデルは選んだフォルダの下の `print3d/` に保存します。Python 環境は Claude Code が用意するプラグイン用のデータフォルダ、無ければ `~/.print3d-modeler/` に作ります。それ以外の場所には書き込みません。
 - **ビューア**：`viewer.html` はネットワークから何も読み込みません。Claude がアーティファクトとして表示した場合、そのファイル（モデルの形と部位名）は他のアーティファクトと同じくあなたの Claude アカウントに保存されます。避けたい場合はそう伝えて、手元のファイルをブラウザで開いてください。
 
 ## 困ったとき
@@ -164,7 +164,7 @@ print3d-modeler にはサーバー・アカウント・API キー・テレメト
 |---|---|
 | 「Python 3.10 or later was not found」と出る | Python 3.10 以上（python.org、Homebrew、パッケージマネージャなど）を入れて、新しいセッションで始め直す |
 | 初回のパッケージのインストールで失敗する | pypi.org につながるか確認し（プロキシやファイアウォールで止められていることがあります）、Claude にセットアップのやり直しを頼む。何度も失敗するときは下の仮想環境を消してやり直す |
-| 更新のあとパッケージがおかしい | `$CLAUDE_PLUGIN_DATA/venv`（または `~/.print3d-modeler/venv`）を消す。次の実行で作り直されます |
+| 更新のあとパッケージがおかしい | プラグイン用のデータフォルダの `venv`（または `~/.print3d-modeler/venv`）を消す。次の実行で作り直されます |
 | ビューアがアーティファクトとして開かない | モデルのフォルダにある `viewer.html` を Chrome・Edge・Safari・Firefox で開く。オフラインでも動きます |
 | プリンタに収まらない | 機種か造形範囲を伝え（`/print3d-modeler:printer`）、モデルを確認し直すよう頼む |
 | 前に作りかけたモデルを続けたい | 「前のモデルの続き」と頼むか `/print3d-modeler:resume` |
