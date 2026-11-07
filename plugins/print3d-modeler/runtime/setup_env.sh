@@ -13,7 +13,7 @@ STAMP="${VENV}/.p3d-requirements"
 find_python() {
   for c in python3.13 python3.12 python3.11 python3.10 python3 python; do
     if command -v "$c" >/dev/null 2>&1; then
-      if "$c" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)' 2>/dev/null; then
+      if "$c" "${RUNTIME_DIR}/check_env.py" version 2>/dev/null; then
         echo "$c"; return 0
       fi
     fi
@@ -34,20 +34,11 @@ else
 fi
 
 if ! cmp -s "${RUNTIME_DIR}/requirements.txt" "$STAMP" 2>/dev/null \
-   || ! "$PY" -c 'import build123d, trimesh, manifold3d' >/dev/null 2>&1; then
+   || ! "$PY" "${RUNTIME_DIR}/check_env.py" deps >/dev/null 2>&1; then
   echo "Installing dependencies (the first run takes a few minutes)..." >&2
   "$PY" -m pip install -q --disable-pip-version-check --upgrade pip >&2 || true
   "$PY" -m pip install -q --disable-pip-version-check -r "${RUNTIME_DIR}/requirements.txt" >&2
   cp "${RUNTIME_DIR}/requirements.txt" "$STAMP"
 fi
 
-"$PY" - <<PYEOF
-import json, build123d, trimesh, manifold3d, sys
-print(json.dumps({
-    "python": "${PY}",
-    "runtime": "${RUNTIME_DIR}",
-    "plugin_root": "${PLUGIN_ROOT}",
-    "versions": {"python": sys.version.split()[0], "build123d": build123d.__version__,
-                 "trimesh": trimesh.__version__},
-}, ensure_ascii=False))
-PYEOF
+"$PY" "${RUNTIME_DIR}/check_env.py" report "$PY" "$RUNTIME_DIR" "$PLUGIN_ROOT"

@@ -38,7 +38,7 @@ Write everything the user reads in the user's language (see "Language" in SKILL.
 ## Step 4. Run and self-check
 
 ```bash
-cd DIR && P3D_RUNTIME=RT PY model.py
+cd DIR && PYTHONPATH=RT PY model.py
 ```
 
 - Look at `auto_check` and `critical_or_major` in the output JSON. **Fix obvious failures yourself and run again** (exceptions, not watertight, split bodies, exceeding the build volume) before going to step 5.

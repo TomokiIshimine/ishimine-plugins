@@ -1,16 +1,13 @@
 """<model name> (<model-slug>)
 
-Run: P3D_RUNTIME=<runtime> <python> model.py
+Run: PYTHONPATH=<runtime> <python> model.py
 Coordinates: up = +Z (Z=0 is the bed), front = -Y, right = +X, millimeters. Build the model as it is used.
 Write the title, labels, descriptions and key_dims names in the user's language, and set lang to match.
 """
 import json
-import os
-import sys
 
-sys.path.insert(0, os.environ["P3D_RUNTIME"])
-from build123d import *  # noqa: E402,F403
-from p3d import LabeledModel  # noqa: E402
+from build123d import *  # noqa: F403
+from p3d import LabeledModel  # the runtime is on PYTHONPATH (see "Run" above)
 
 # ---- Parameters (link each to its requirement ID in a comment) ------------
 EMBED = 1.0        # overlap between parts so they fuse reliably

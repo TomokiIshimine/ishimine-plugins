@@ -12,7 +12,7 @@ PY="$1"
 WORK="$2"
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 PLUGIN="${REPO}/plugins/print3d-modeler"
-export P3D_RUNTIME="${PLUGIN}/runtime"
+RT="${PLUGIN}/runtime"
 M="${WORK}/phone-stand"
 
 rm -rf "$M"
@@ -24,7 +24,7 @@ end() { echo "::endgroup::"; }
 need() { for f in "$@"; do [ -s "${M}/${f}" ] || { echo "::error::missing or empty: ${f}"; exit 1; }; done; }
 
 step "model.py (LabeledModel.build)"
-(cd "$M" && "$PY" model.py) | tee "${WORK}/build.json"
+(cd "$M" && PYTHONPATH="$RT" "$PY" model.py) | tee "${WORK}/build.json"
 end
 need parts.json analysis.json viewer.html out/model.glb out/model.stl out/model.step \
      out/parts/base.stl out/parts/backrest.stl out/parts/front_lip.stl out/parts/rib.stl out/print/main.stl
@@ -35,7 +35,7 @@ assert r["auto_check"] == "PASS", f"sample model should pass the automatic check
 assert not r["critical_or_major"], r["critical_or_major"]
 PY
 
-cd "$P3D_RUNTIME"
+cd "$RT"
 
 step "p3d.analyze"
 "$PY" -m p3d.analyze "$M"

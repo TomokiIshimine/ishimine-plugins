@@ -53,7 +53,7 @@ Keep identifiers in English in every language: part ids, file and folder names, 
 | 1. Hearing | Ask about purpose, size, shape, movement/assembly, and printing setup | `spec.md` (requirements R1, R2…) and `print3d/printer.json` exist |
 | 2. Design | Decide the parts, dimensions and candidate print orientations; confirm the key points | `design.md` and a confirmed part list |
 | 3. Implement | Write `model.py` (one `add_part` per part) | `model.py` exists |
-| 4. Run and self-check | Run `P3D_RUNTIME=RT PY model.py` and fix obvious failures yourself | `parts.json` `analysis.json` `out/` `viewer.html` exist |
+| 4. Run and self-check | Run `PYTHONPATH=RT PY model.py` and fix obvious failures yourself | `parts.json` `analysis.json` `out/` `viewer.html` exist |
 | 5. Review | Launch the two reviewers in parallel → fix FAILs and review again (up to 3 rounds) | `reviews/iter-N-*.json` |
 | 6. User check | Have the user look at the viewer and give instructions in chat | Feedback added to `spec.md` (→ back to step 2 or 3) / the user says OK |
 | 7. Export | Write STL/3MF in print orientation and the print notes | `out/final/*.3mf` `*.stl` `print-notes.md` |
