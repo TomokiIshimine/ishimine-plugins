@@ -92,7 +92,7 @@ Ask the `questions_for_user` from `requirements-reviewer` (requirements it could
 
 ## User check (step 6)
 
-1. Show the viewer (already built in step 4; if missing, run `cd RT && PY -m p3d.viewer <model_dir>`) and give the link. Add 2–3 lines on how to use it (drag to rotate, wheel to zoom, hover a part to see its name, open the panel with the button at the top right to toggle what is shown, and use the direction labels to give instructions in chat). Use the button names as they appear in the viewer's language.
+1. Show the viewer (already built in step 4; if missing, run `cd RT && PY -m p3d.viewer <model_dir>`) and give the link. Add 2–3 lines on how to use it (drag to rotate, wheel to zoom, hover a part to see its name, click it to copy the name for chat, open the panel with the button at the top right to toggle what is shown, and use the direction labels to give instructions in chat). Use the button names as they appear in the viewer's language.
 2. If there are points to confirm (`questions_for_user` from the review, things you were unsure about in the design), ask them with AskUserQuestion in the same message as the viewer (include part labels and directions). Do not put questions in the viewer.
 3. Add the chat instructions and answers to `spec.md` as requirements and go back to step 2 or 3. If the user says OK, go to step 7.
 

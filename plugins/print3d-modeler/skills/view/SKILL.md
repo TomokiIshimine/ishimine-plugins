@@ -24,6 +24,6 @@ Target: $ARGUMENTS (defaults to the most recently updated model)
 4. If a tool for creating artifacts is available, show the contents of `viewer.html` as an artifact as is. Always also give a link to the file (in Cowork `computer://<absolute path>`; it works offline when opened in a browser).
 5. Add short usage notes in the user's language, using the button names as they appear in the viewer:
    - Left drag to rotate, wheel to zoom (toward the cursor), right drag to pan, double-click to make that point the rotation center.
-   - Hovering a part shows its name (such as "P1 Base"). Together with the directions (up/down, front/back, left/right), the user can give instructions in chat like "make P2 Backrest 10 mm taller".
+   - Hovering a part shows its name (such as "P1 Base"). Together with the directions (up/down, front/back, left/right), the user can give instructions in chat like "make P2 Backrest 10 mm taller". Clicking (or tapping) a part copies its name to the clipboard, ready to paste into chat.
    - The button at the top right opens the panel, where parts (per object if there are several) can be shown, hidden or made transparent, and part labels, directions, faces likely to need support and the size-reference coin can be toggled.
    - The print orientation button shows how it sits on the bed and the build volume.
