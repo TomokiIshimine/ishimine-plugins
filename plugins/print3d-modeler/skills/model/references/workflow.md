@@ -57,7 +57,7 @@ cd DIR && PYTHONPATH=RT PY model.py
 
 ### Checking in the viewer
 
-- The viewer is kept to a viewing tool (rotate, zoom, pan, part names on hover, show/hide per part or object, as used / print orientation, and toggles for directions, part labels, faces needing support, bed contact faces and a size-reference coin). It has no question cards, review findings or measurement lists.
+- The viewer is kept to a viewing tool (rotate, zoom, pan, part names on hover, click a part to copy its name, show/hide per part or object, as used / print orientation, and toggles for directions, part labels, faces needing support, bed contact faces and a size-reference coin). It has no question cards, review findings or measurement lists.
 - Its UI language follows `lang` (English or Japanese). Make sure it matches the conversation; if not, fix `lang` in model.py, or run `cd RT && PY -m p3d.viewer DIR --lang <en|ja>`.
 - Ask the points you want to confirm (`questions_for_user` from the review, design choices you were unsure about, the choice of print orientation, and so on) with AskUserQuestion in the same message as the viewer. 1–3 at a time, with part labels (`P2 Backrest`) and directions.
 - When making several objects (pieces printed separately), use separate `print_group`s and name them with `m.set_object_label("lid", "Lid")`. The viewer's part list then nests checkboxes per object.

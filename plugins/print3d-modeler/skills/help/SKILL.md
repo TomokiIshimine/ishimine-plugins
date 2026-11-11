@@ -65,7 +65,7 @@ Commands are optional: asking in plain words works the same. Without a model nam
 2. **Design**: the model is split into named parts ("Base", "Backrest") with dimensions and a print orientation; you confirm the key points.
 3. **Build**: Claude writes the model in Python and fixes obvious problems found by automatic measurements (wall thickness, overhangs, bed contact, build volume…).
 4. **Review**: two independent reviewers check "will it print?" and "does it meet the requirements?"; Claude fixes what they find, up to 3 rounds, before showing you.
-5. **Your check**: a 3D viewer opens. Hover a part to see its name (P1, P2…), then ask for changes in chat with part names and directions: "make P2 Backrest 10 mm taller". Steps 2–5 repeat until you are happy.
+5. **Your check**: a 3D viewer opens. Hover a part to see its name (P1, P2…) and click it to copy the name, then ask for changes in chat with part names and directions: "make P2 Backrest 10 mm taller". Steps 2–5 repeat until you are happy.
 6. **Export**: 3MF / STL already placed in print orientation, and print notes (supports, brim, recommended settings). The 3MF opens directly in Bambu Studio, PrusaSlicer, OrcaSlicer or Cura.
 
 Good to know (mention when relevant, not all at once):

@@ -78,7 +78,7 @@ Also: the viewer is one self-contained HTML file (`viewer.html` in the model's f
 
 **Look at any detail.** Drag to rotate, scroll to zoom toward the cursor, right-drag to pan, and double-click a point to rotate around it. The buttons at the top jump to front, back, left, right, top, bottom or an overview.
 
-**Know what every part is called.** Hover over a part to see its name, description and key dimensions. Part labels (P1 Base, P2 Walls, P3 Roof…) and the direction labels (up/down, front/back, left/right) give you the words to use in chat; each direction label also shows its axis (front −Y, right +X, up +Z). The box at the bottom left keeps the model name, overall size and part count in view.
+**Know what every part is called.** Hover over a part to see its name, description and key dimensions; click it (or tap it on a phone) to copy its name, ready to paste into chat. Part labels (P1 Base, P2 Walls, P3 Roof…) and the direction labels (up/down, front/back, left/right) give you the words to use in chat; each direction label also shows its axis (front −Y, right +X, up +Z). The box at the bottom left keeps the model name, overall size and part count in view.
 
 ![Hovering the chimney shows its name, description and size](docs/images/en/viewer-hover.png)
 

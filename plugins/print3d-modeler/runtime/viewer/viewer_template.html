@@ -134,6 +134,13 @@
   #tip .t small { color: var(--muted); font-weight: 600; font-variant-numeric: tabular-nums; }
   #tip p { margin: 3px 0 0; color: var(--ink-soft); }
   #tip .m { margin-top: 4px; color: var(--muted); font-variant-numeric: tabular-nums; }
+  /* "Copied" note: a small ink pill just above the point that was clicked, gone after a moment */
+  #toast { position: absolute; z-index: 6; pointer-events: none; display: flex; align-items: center; gap: 5px;
+    max-width: calc(100% - 16px); padding: 5px 11px 5px 8px; border-radius: 999px; background: var(--ink); color: var(--surface);
+    font-size: 12px; font-weight: 600; white-space: nowrap; box-shadow: var(--shadow); opacity: 0; transition: opacity .15s ease; }
+  #toast.on { opacity: 1; }
+  #toast svg { width: 14px; height: 14px; flex: none; }
+  #toast span { overflow: hidden; text-overflow: ellipsis; }
   #err { position: absolute; inset: 0; display: none; place-items: center; padding: 24px; text-align: center; color: var(--muted); }
 
   /* ---------- panel contents */
@@ -247,6 +254,7 @@
     </div>
     <canvas id="gizmo" data-i18n-title="gizmoTitle"></canvas>
     <div id="tip"></div>
+    <div id="toast" role="status" aria-live="polite"></div>
     <div id="err"></div>
   </main>
   <aside id="panel">
@@ -294,7 +302,7 @@ window.P3D_I18N = {
     gizmoTitle: "Click a direction to view from it",
     hintTitle: "Mouse controls",
     hint: [["Left drag", "rotate"], ["Wheel", "zoom toward the cursor"], ["Right drag or Shift+drag", "pan"],
-      ["Double-click", "rotate around that point"]],
+      ["Double-click", "rotate around that point"], ["Click a part", "copy its name"]],
     tbSize: "Size (W × D × H)", tbParts: "Parts", tbBuilt: "Built",
     nObjects: (n) => `in ${n} objects`,
     modeGroup: "Orientation", viewGroup: "View from",
@@ -312,6 +320,7 @@ window.P3D_I18N = {
     nParts: (n) => `${n} ${n === 1 ? "part" : "parts"}`, only: "Show only this",
     onlyObj: "Show only this object", onlyPart: "Show only this part", toggleObj: "Expand / collapse",
     bbox: (s) => `Size ${s.join(" × ")} mm`,
+    copied: (n) => `Copied “${n}”`, copyFailed: "Could not copy the name",
     error: "Could not start the 3D view. Please open it in a recent version of Chrome, Edge, Safari or Firefox.",
   },
   ja: {
@@ -320,7 +329,7 @@ window.P3D_I18N = {
     gizmoTitle: "クリックした方向から見る",
     hintTitle: "マウス操作",
     hint: [["左ドラッグ", "回転"], ["ホイール", "カーソル位置へ拡大縮小"], ["右ドラッグ / Shift+ドラッグ", "移動"],
-      ["ダブルクリック", "その点を回転の中心に"]],
+      ["ダブルクリック", "その点を回転の中心に"], ["部品をクリック", "部品名をコピー"]],
     tbSize: "外形（幅×奥行×高さ）", tbParts: "パーツ", tbBuilt: "作成",
     nObjects: (n) => `${n} オブジェクト`,
     modeGroup: "向き", viewGroup: "視点",
@@ -338,6 +347,7 @@ window.P3D_I18N = {
     nParts: (n) => `${n} パーツ`, only: "これだけ表示",
     onlyObj: "このオブジェクトだけ表示", onlyPart: "このパーツだけ表示", toggleObj: "開く／たたむ",
     bbox: (s) => `外形 ${s.join(" × ")} mm`,
+    copied: (n) => `「${n}」をコピーしました`, copyFailed: "部品名をコピーできませんでした",
     error: "3D 表示を開始できませんでした。最新の Chrome / Edge / Safari / Firefox で開いてください。",
   },
 };
@@ -846,6 +856,55 @@ renderer.domElement.addEventListener("pointerup", (e) => {
   touchStart = null;
   const hit = pick(e);
   if (hit) { showTip(e, hit.object.userData.index); setHover([hit.object.userData.index]); } else { hideTip(); setHover(null); }
+});
+
+// ---------------------------------------------------------------- click a part: copy its name, to paste into chat
+// The name is the label as written in model.py. When several objects have a part with the same label,
+// the object's label goes in front ("Box A / Lid") so the name still points at one part.
+const copyName = (i) => {
+  const p = M.parts[i];
+  const dup = nested && M.parts.some((q, j) => j !== i && q.label === p.label);
+  return dup ? `${objLabel[p.group] ?? p.group} / ${p.label}` : p.label;
+};
+// navigator.clipboard needs a secure context and, inside an iframe, the clipboard-write permission;
+// when it is missing or refused, fall back to selecting a hidden textarea and execCommand("copy")
+function copyText(text) {
+  const fallback = () => {
+    const ta = el("textarea", { value: text, readOnly: true });
+    ta.style.cssText = "position:fixed;top:0;left:0;width:1px;height:1px;opacity:0;";
+    const prev = document.activeElement;
+    document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, text.length);
+    let ok = false;
+    try { ok = document.execCommand("copy"); } catch (err) { ok = false; }
+    ta.remove(); prev?.focus?.({ preventScroll: true });
+    return ok;
+  };
+  if (navigator.clipboard?.writeText && window.isSecureContext) {
+    return navigator.clipboard.writeText(text).then(() => true, fallback);
+  }
+  return Promise.resolve(fallback());
+}
+const toast = $("toast");
+let toastTimer = 0;
+function showToast(e, text, ok) {
+  toast.innerHTML = (ok ? `<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 8.5l3 3 6-7"/></svg>` : "")
+    + `<span>${esc(text)}</span>`;
+  const r = host.getBoundingClientRect(), w = toast.offsetWidth, h = toast.offsetHeight;
+  const x = Math.max(8, Math.min(e.clientX - r.left - w / 2, r.width - w - 8));
+  const above = e.clientY - r.top - h - 14;
+  toast.style.left = `${x}px`; toast.style.top = `${above >= 8 ? above : e.clientY - r.top + 18}px`;
+  toast.classList.add("on");
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove("on"), 1600);
+}
+// A click is a press and release that barely moves (a drag rotates or pans the view instead)
+let downAt = null;
+renderer.domElement.addEventListener("pointerdown", (e) => { downAt = [e.clientX, e.clientY]; });
+renderer.domElement.addEventListener("click", (e) => {
+  if (e.button !== 0 || e.shiftKey || !downAt || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 5) return;
+  const hit = pick(e);
+  if (!hit) return;
+  const name = copyName(hit.object.userData.index);
+  copyText(name).then((ok) => showToast(e, ok ? L.copied(name) : L.copyFailed, ok));
 });
 renderer.domElement.addEventListener("dblclick", (e) => {          // make that point the rotation center
   const hit = pick(e);
