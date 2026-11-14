@@ -34,6 +34,13 @@ r = json.load(open(sys.argv[1]))
 assert r["auto_check"] == "PASS", f"sample model should pass the automatic check: {r}"
 assert not r["critical_or_major"], r["critical_or_major"]
 PY
+"$PY" - "${M}/parts.json" <<'PY'
+import json, sys
+pj = json.load(open(sys.argv[1]))
+lay = pj["print_layout"]
+assert lay["plates"] == 1, lay
+assert all(g["plate"] == 1 and g["bed_fit"] == "fits" for g in pj["print_orientation"]["groups"].values()), pj
+PY
 
 cd "$RT"
 
@@ -65,6 +72,10 @@ end
 
 step "p3d.printer"
 "$PY" -m p3d.printer "$M" > /dev/null
+"$PY" -m p3d.printer --presets > /dev/null
+"$PY" -m p3d.printer --find "A1 mini" | grep -q '"bambu-a1-mini"'
+"$PY" -m p3d.printer --save "${WORK}/printer-check" --preset bambu-h2d --nozzle-mode dual --folder-only > /dev/null
+"$PY" -m p3d.printer "${WORK}/printer-check/model" | grep -q '"nozzle_mode": "dual"'
 end
 
 step "p3d.export"

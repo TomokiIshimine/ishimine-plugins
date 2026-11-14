@@ -22,6 +22,7 @@ import numpy as np
 import trimesh
 
 from .files import ANALYSIS_JSON, load_dir, write_json
+from .layout import DIAGONAL, fits_bed, is_current
 from .meshutil import boolean, direction_label, fuse, np_default, place_on_bed, round_list, transformed
 from .printer import load_printer
 
@@ -174,12 +175,6 @@ def com_inside_contact(mesh) -> tuple[bool, float]:
     return bool(inside), area
 
 
-def fits(size, vol):
-    a, b, h = size
-    X, Y, Z = vol
-    return h <= Z and ((a <= X and b <= Y) or (a <= Y and b <= X))
-
-
 def posed_overhang_mask(pm, design_parts, M, limit_deg):
     """Overhang mask of pm, a fused piece already moved by M. Faces held up by an overlapping part do not count."""
     return overhang_mask(pm, limit_deg, [transformed(m, M) for m in design_parts])
@@ -271,11 +266,15 @@ def _check_mesh(gp: GroupPose, bodies: int, f: Findings):
 
 def _check_build_volume(gp: GroupPose, lim: Limits, f: Findings) -> bool:
     size, vol = gp.pm.extents, lim.volume
-    ok = fits(size, vol)
+    ok = fits_bed(gp.pm, vol)
     if not ok:
-        f.add("critical", f"[{gp.name}] Does not fit the build volume {vol[0]}×{vol[1]}×{vol[2]} mm ({size[0]:.1f}×{size[1]:.1f}×{size[2]:.1f} mm)",
-              evidence=f"printer={lim.printer['name']}", check="build_volume",
-              suggestion="Change the print orientation / split it into separate print_groups / scale it down")
+        why = (f"it is {size[2]:.1f} mm tall (build height {vol[2]} mm)" if size[2] > vol[2]
+               else "its footprint does not fit the bed at any angle")
+        f.add("critical", f"[{gp.name}] Does not fit the build volume of {lim.printer['name']} {vol[0]}×{vol[1]}×{vol[2]} mm: "
+              f"{why} (piece {size[0]:.1f}×{size[1]:.1f}×{size[2]:.1f} mm)",
+              evidence=f"printer={lim.printer['name']}, source={lim.printer.get('source', 'default')}", check="build_volume",
+              suggestion="Change the print orientation / split it into separate print_groups / scale it down / "
+                         "check that the printer setting is the user's printer")
     return ok
 
 
@@ -361,7 +360,7 @@ def _orientation_candidates(gp: GroupPose, lim: Limits) -> list:
         _, ca = com_inside_contact(cm)
         cands.append({"name": name, "rotation_deg": rot, "overhang_area_mm2": round(float(cm.area_faces[om].sum()), 1),
                       "bed_contact_area_mm2": round(ca, 1), "height_mm": round(float(cm.extents[2]), 1),
-                      "fits": fits(cm.extents, lim.volume)})
+                      "fits": fits_bed(cm, lim.volume)})
     cands.sort(key=lambda c: (not c["fits"], c["bed_contact_area_mm2"] <= 0, c["overhang_area_mm2"]))
     return cands
 
@@ -427,6 +426,39 @@ def _check_clearances(poses: list[GroupPose], part_meshes, lim: Limits, f: Findi
     return out
 
 
+# --------------------------------------------------------------------- layout on the bed
+def _check_layout(pj: dict, lim: Limits, f: Findings) -> dict:
+    """How the pieces sit on the printer's plates (laid out by LabeledModel.build, see p3d.layout)."""
+    lay = pj.get("print_layout")
+    groups = pj["print_orientation"]["groups"]
+    name, vol = lim.printer["name"], [float(v) for v in lim.volume]
+    if not is_current(lay, lim.printer):
+        made_for = (f"{lay['printer']} {'×'.join(f'{v:g}' for v in lay['bed_mm'])} mm, {lay['spacing_mm']:g} mm apart"
+                    if lay else "no printer")
+        f.add("major", f"The print layout was made for {made_for}, not for the current printer {name} "
+              f"{'×'.join(f'{v:g}' for v in vol)} mm, {float(lim.printer['part_spacing_mm']):g} mm apart", check="layout",
+              evidence=f"parts.json print_layout={lay and [lay['bed_mm'], lay['spacing_mm']]}, "
+                       f"printer={[vol, lim.printer['part_spacing_mm']]}",
+              suggestion="Run model.py again so the pieces are laid out on the current printer's bed")
+        return {"plates": None, "stale": True}
+    if lay["plates"] > 1:
+        per = {}
+        for g, gi in groups.items():
+            per.setdefault(gi["plate"], []).append(g)
+        f.add("warning", f"The pieces do not all fit on one plate of {name} ({vol[0]:g}×{vol[1]:g} mm): "
+              f"they need {lay['plates']} print runs", check="layout",
+              evidence="; ".join(f"plate {k}: {', '.join(v)}" for k, v in sorted(per.items())),
+              suggestion="Tell the user. Export writes one 3MF per plate. Scale down or split pieces if one run is required")
+    for g, gi in groups.items():
+        if gi.get("bed_fit") == DIAGONAL:
+            f.add("info", f"[{g}] Fits the bed only when turned {gi['bed_turn_deg']:g}° about Z (diagonally); "
+                  "the layout and the exported files are already turned", check="layout",
+                  evidence=f"footprint {gi['size_mm'][0]}×{gi['size_mm'][1]} mm on a {vol[0]:g}×{vol[1]:g} mm bed")
+    return {"plates": lay["plates"], "stale": False, "printer": lay["printer"], "bed_mm": lay["bed_mm"],
+            "pieces": {g: {"plate": gi["plate"], "bed_turn_deg": gi["bed_turn_deg"], "bed_fit": gi["bed_fit"]}
+                       for g, gi in groups.items()}}
+
+
 # --------------------------------------------------------------------- main analysis
 def analyze_dir(d: str | Path, write: bool = True) -> dict:
     d = Path(d)
@@ -438,6 +470,7 @@ def analyze_dir(d: str | Path, write: bool = True) -> dict:
     poses = [GroupPose(g, gi, part_meshes) for g, gi in pj["print_orientation"]["groups"].items()]
     groups_out = [_analyze_group(gp, lim, findings) for gp in poses]
     clearances = _check_clearances(poses, part_meshes, lim, findings) if len(poses) > 1 else []
+    layout = _check_layout(pj, lim, findings)
 
     findings.sort(key=lambda x: SEVERITY_RANK[x["severity"]])
     allb = trimesh.util.concatenate(list(part_meshes.values())).bounds
@@ -451,6 +484,7 @@ def analyze_dir(d: str | Path, write: bool = True) -> dict:
         },
         "groups": groups_out,
         "clearances": clearances,
+        "layout": layout,
         "findings": list(findings),
         "thresholds": lim.as_dict(),
     }

@@ -24,6 +24,7 @@ Rules that let the main agent, the reviewers, the viewer and the user speak the 
 - Millimeters, right-handed.
 - Build the model **as it is used (design pose)**. When the user says "extend it up", "up" always means +Z in the design pose, whatever language they say it in.
 - Keep the print orientation separately, as angles (degrees) that rotate the design pose about X, then Y, then Z (`set_print_orientation`). It is applied only to the final STL/3MF.
+- After that rotation, `build()` lays the pieces out on the printer's bed (`p3d.layout`): it may turn a piece further about Z (`bed_turn_deg`, which changes nothing about supports or bed contact) and moves it to its spot on plate 1, 2…. The result is the `matrix` of each group in parts.json; the design pose is never changed.
 - Write `direction` in findings and reviews as `"up (+Z)"` or `"+Z"`. Translate the word when you show it to the user.
 
 ## Parts
@@ -47,7 +48,8 @@ Rules that let the main agent, the reviewers, the viewer and the user speak the 
 
 ```
 print3d/
-├── printer.json             printer settings (shared by all models; one in a model folder takes priority)
+├── printer.json             printer settings (shared by all models; one in a model folder takes priority;
+│                            without either, the remembered printer saved by `p3d.printer --save` applies)
 └── <model-slug>/
     ├── spec.md              requirements (R1…), print environment, user feedback history  … written by the main agent
     ├── design.md            part breakdown, dimensions, reasons for the print orientation … written by the main agent
@@ -61,9 +63,9 @@ print3d/
     └── out/
         ├── model.glb, model.stl, model.step   design pose (GLB has one node per part, Z-up, extras.label)
         ├── parts/<id>.stl                      per part (design pose)
-        ├── print/<group>.stl                   print pose (on the bed, fused per group)
+        ├── print/<group>.stl                   print pose (fused per group, laid out on the printer's plates)
         ├── parts.prev.json                     previous part definitions (requirements-reviewer uses it to spot unintended changes)
-        └── final/<model>.3mf, <model>_<group>.stl  final output (export)
+        └── final/<model>.3mf, <model>_<group>.stl  final output (export; <model>_plate<N>.3mf when it needs several plates)
 ```
 
 `parts.json` is generated from model.py, so never edit it by hand. To change part names or dimensions, fix model.py and run it again.
@@ -73,11 +75,12 @@ print3d/
 | Command (`cd RT && PY -m …`) | Purpose |
 |---|---|
 | `PYTHONPATH=RT PY model.py` (run in DIR) | Build the model → writes parts.json / out / analysis.json / viewer.html at once |
-| `p3d.analyze DIR [--stdout]` | Automatic printability checks (watertight, body count, build volume, wall thickness, overhangs, bridges, bed contact and center of mass, clearance, alternative orientations) |
+| `p3d.analyze DIR [--stdout]` | Automatic printability checks (watertight, body count, build volume, wall thickness, overhangs, bridges, bed contact and center of mass, clearance, alternative orientations, layout on the plates) |
 | `p3d.measure DIR [--part id / --section z=30 / --distance a b / --ray x,y,z dx,dy,dz]` | Measure dimensions |
 | `p3d.viewer DIR [--lang en\|ja]` | Rebuild only the viewer (does not rebuild the model) |
 | `p3d.export DIR` | Write the final STL/3MF and print facts for the print notes as JSON |
-| `p3d.printer DIR` / `p3d.printer --presets` | Show the printer settings in use / list presets |
+| `p3d.printer DIR` / `p3d.printer --presets` / `p3d.printer --find NAME` | Show the printer settings in use (and their `source`) / list presets / match a printer name to presets |
+| `p3d.printer --save DIR --preset KEY` (or `--name N --volume XxYxZ`) `[--nozzle --material --nozzle-mode --folder-only]` | Write DIR/printer.json and remember the user's printer (see the `printer` skill) |
 
 model.py imports `p3d` from `PYTHONPATH`. A model.py made before version 0.5.3 has an extra `sys.path.insert(…)` line just above its imports: delete that line, then run it as above.
 

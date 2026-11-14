@@ -13,7 +13,7 @@ skills/      model (entry), resume, view, review, export, printer, help    user-
              modeling-conventions, printability-rules                       internal rule books (user-invocable: false)
 agents/      printability-reviewer, requirements-reviewer                  read-only, reply with JSON only
 runtime/     setup_env.sh, requirements.txt                                 venv in $CLAUDE_PLUGIN_DATA or ~/.print3d-modeler
-             p3d/ model.py (LabeledModel), analyze.py, measure.py, export.py, printer.py, viewer.py, meshutil.py
+             p3d/ model.py (LabeledModel), analyze.py, measure.py, export.py, printer.py, layout.py, viewer.py, meshutil.py
              viewer/viewer_template.html + vendor/three-bundle.partNN.js    single-file offline viewer (three.js inlined)
 ```
 
@@ -24,7 +24,8 @@ Python 3.10+, build123d (modeling), trimesh (measurement, GLB/STL), manifold3d (
 These are decided with the maintainer and are relied on by the skills, the reviewers, the viewer and the user. Do not change them in passing.
 
 - **Coordinates:** millimeters, right-handed, **up = +Z (Z = 0 is the bed), front = −Y, right = +X**. Direction labels are written `"up (+Z)"`, `"front (-Y)"` and so on (`meshutil.DIRECTION_LABELS`).
-- **Design pose vs print pose:** models are built and reported in the pose they are used in. The print orientation is stored separately as rotations about fixed X, then Y, then Z (`set_print_orientation`, `meshutil.rotation_matrix`) and applied only to `out/print/` and the final export.
+- **Design pose vs print pose:** models are built and reported in the pose they are used in. The print orientation is stored separately as rotations about fixed X, then Y, then Z (`set_print_orientation`, `meshutil.rotation_matrix`) and applied only to `out/print/` and the final export. After it, `p3d.layout` may only turn a piece about Z and move it on the printer's plates; the group `matrix` in parts.json includes both.
+- **Printer settings:** `printer.json` in the model folder, then `print3d/`, then the remembered printer (`printer.json` next to the runtime venv, written by `p3d.printer --save`), then defaults. Bambu Lab preset volumes follow bambulab.com spec pages; for two-nozzle printers `build_volume_mm` is the single-nozzle area.
 - **FDM thresholds** default to a 0.4 mm nozzle and PLA: walls ≥ 2 × nozzle, details ≥ nozzle, overhang ≤ 45°, bridge ≤ 10 mm, fit clearance 0.2–0.4 mm, bed contact ≥ 50 mm². `printer.json` (model folder, then `print3d/`) overrides them.
 - **Language:** plugin text is English. Labels, `key_dims` names and user-facing files are in the user's language. Identifiers stay English: part ids, file names, JSON keys, requirement IDs (`R1`…), severities, and the `## vN … step X` lines in `history.md`. The viewer UI supports `en` and `ja`.
 
@@ -37,7 +38,7 @@ These are decided with the maintainer and are relied on by the skills, the revie
 
 ### Printability checks
 
-- The thresholds and check names in `skills/printability-rules/SKILL.md` (`watertight`, `bodies`, `build_volume`, `bed_contact`, `wall_thickness`, `clearance`, `overhang`, `bridge`, `orientation`) must match what `p3d/analyze.py` and `p3d/printer.py` actually use. Flag a change to one side only.
+- The thresholds and check names in `skills/printability-rules/SKILL.md` (`watertight`, `bodies`, `build_volume`, `bed_contact`, `wall_thickness`, `clearance`, `overhang`, `bridge`, `orientation`, `layout`) must match what `p3d/analyze.py` and `p3d/printer.py` actually use. Flag a change to one side only.
 - Flag changes that make `analyze` stop reporting a real defect: lowering a severity (critical/major → warning) without a reason, widening a threshold beyond the printer settings, skipping a group or part, or swallowing an exception so a failed check reads as a pass. A FAIL verdict must stay "at least one critical or major finding".
 - Thresholds must come from the resolved printer settings (`load_printer`), not from hard-coded numbers, so a user's `printer.json` (for example a 0.6 mm nozzle) takes effect.
 
@@ -49,7 +50,7 @@ Several files read each other's output. A change to one side without the other b
 - `analysis.json` / `p3d.analyze --stdout`: findings carry `severity`, `issue`, `part`, `direction`, `evidence`, `suggestion`, `location`, `check`, plus `thresholds`. The printability reviewer and the skills read these keys.
 - Reviewer output JSON (`agents/*.md`, "Output" section): keys `reviewer`, `iteration`, `verdict`, `findings[]` with `id`, `severity`, `part`, `direction`, `issue`, `evidence`, `suggestion`, `location`; the requirements reviewer also returns `requirements[]` (`id`, `status`, `evidence`) and `questions_for_user[]` (`id`, `part`, `text`, `options`). `skills/model/references/workflow.md` saves and acts on them, and the main agent passes `questions_for_user` straight to AskUserQuestion. Flag schema changes not mirrored in the workflow.
 - `runtime/setup_env.sh` must print a JSON object with `python` and `runtime` on its **last** line; every skill parses it. Flag anything that prints after it on stdout, and changes that make the script non-idempotent or drop the Windows `Scripts/python.exe` path.
-- CLI commands and flags documented in `skills/modeling-conventions/SKILL.md` (`p3d.analyze`, `p3d.measure --part/--section/--distance/--ray`, `p3d.viewer --lang`, `p3d.export`, `p3d.printer --presets`) and the `LabeledModel` API shown there must exist with those names. Flag renames that leave the docs or skills pointing at old names.
+- CLI commands and flags documented in `skills/modeling-conventions/SKILL.md` (`p3d.analyze`, `p3d.measure --part/--section/--distance/--ray`, `p3d.viewer --lang`, `p3d.export`, `p3d.printer --presets/--find/--save`) and the `LabeledModel` API shown there must exist with those names. Flag renames that leave the docs or skills pointing at old names.
 - `resume` reads the last `## vN … step X` line of `history.md`. Flag changes to how that line is written or parsed on only one side.
 
 ### Reviewer subagents

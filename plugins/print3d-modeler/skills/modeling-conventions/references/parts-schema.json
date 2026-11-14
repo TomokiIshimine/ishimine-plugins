@@ -16,9 +16,20 @@
         "bed_face": "bottom of the base",
         "matrix": [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]],
         "parts": ["base", "backrest"],
-        "size_mm": [80, 90, 100]
+        "size_mm": [80, 90, 100],
+        "plate": 1,
+        "bed_turn_deg": 0,
+        "bed_fit": "fits"
       }
     }
+  },
+  "print_layout": {
+    "$comment": "Layout of the print-pose pieces on the printer's bed (p3d.layout). matrix above already includes it. Plate k is centered at x = (k-1) * plate_pitch_mm; bed_fit is fits / diagonal / too_big.",
+    "printer": "Bambu Lab A1 mini",
+    "bed_mm": [180, 180, 180],
+    "spacing_mm": 6,
+    "plates": 1,
+    "plate_pitch_mm": 220
   },
   "objects": {"main": "Phone stand"},
   "print_note": "Print with the bottom of the base down",

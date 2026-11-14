@@ -106,14 +106,16 @@ The viewer UI is available in English and Japanese.
 | "Show it in 3D" / `/print3d-modeler:view` | view | Rebuilds and opens the 3D viewer |
 | "Review it again" / `/print3d-modeler:review` | review | Reruns only the printability and requirements reviews |
 | "Export the STL" / `/print3d-modeler:export` | export | Writes 3MF / STL in print orientation plus print notes |
-| "My printer is an A1 mini" / `/print3d-modeler:printer` | printer | Sets build volume, nozzle size and material |
+| "My printer is an A1 mini" / `/print3d-modeler:printer` | printer | Sets and remembers your printer (build volume, nozzle size, material) |
 | "How do I use this?" / `/print3d-modeler:help` | help | Explains the commands, the workflow and how to get started, and lists your models in progress |
 
 ## Printer settings
 
 - FDM printers only.
 - Default thresholds assume a 0.4 mm nozzle: walls at least 0.8 mm, overhangs up to 45°, bridges up to 10 mm, fit clearance 0.2–0.4 mm.
-- The build volume defaults to 220×220×250 mm. Presets are included for popular printers (Bambu Lab A1 / A1 mini / P1S / X1C, Prusa MK4 / CORE One / MINI+, Creality Ender-3 V3 / K1, and others), and any value can be overridden.
+- The build volume defaults to 220×220×250 mm. Presets cover the main Bambu Lab printers (A1 mini, A1, P1P, P1S, P2S, X1 Carbon, X1E, X2D, H2S, H2D / H2D Pro, H2C, H3C; volumes from Bambu Lab's spec pages) and other popular printers (Prusa MK4 / CORE One / MINI+, Creality Ender-3 V3 / K1, and others). Any value can be overridden.
+- Tell Claude your printer once: it is saved in `print3d/printer.json` and remembered for your next models (in the plugin's data folder, and in Claude's memory where the app has one).
+- Pieces are laid out on your printer's bed for printing: turned 90° or diagonally when that is what makes them fit, and packed onto one plate when they can be. If they need more than one plate, Claude tells you and exports one 3MF per plate; if a piece does not fit your printer at all, Claude warns you and suggests splitting or scaling it.
 
 ## Conventions
 
@@ -126,7 +128,7 @@ Claude creates `print3d/<model-name>/` under the folder you choose and keeps eve
 
 ```
 print3d/
-├── printer.json         printer settings shared by all models
+├── printer.json         printer settings shared by all models (your remembered printer applies if it is missing)
 └── small-house/
     ├── spec.md          requirements (R1, R2…) and your feedback
     ├── design.md        parts, dimensions, print orientation

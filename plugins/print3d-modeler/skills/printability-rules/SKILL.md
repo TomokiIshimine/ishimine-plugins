@@ -20,7 +20,7 @@ Every number appears in `thresholds` in the `p3d.analyze` output; treat that as 
 |---|---|---|---|
 | Mesh is closed (watertight, manifold) | No holes, flipped faces or self-intersections | critical | `watertight` |
 | A piece printed in one go is a single connected body | `bodies == 1` (per group) | critical | `bodies` |
-| Fits the build volume | Within the printer's `build_volume_mm` (a 90° Z rotation is allowed) | critical | `build_volume` |
+| Fits the build volume | Within the printer's `build_volume_mm`, turned about Z at any angle (the layout turns it 90° or diagonally when needed) | critical | `build_volume` |
 | Has a flat face on the bed | Contact area > 0 | critical | `bed_contact` |
 | Stable on the bed | Contact area ≥ 50 mm² and center of mass inside the contact area | major | `bed_contact` |
 | Minimum wall thickness | Nozzle × 2 (0.8 mm) or more | major | `wall_thickness` |
@@ -29,6 +29,9 @@ Every number appears in `thresholds` in the `p3d.analyze` output; treat that as 
 | Overhang | Within 45° of vertical. Steeper faces need support | warning | `overhang` |
 | Bridge | Downward horizontal faces with a short side of 10 mm or less print without support | warning (when exceeded) | `bridge` |
 | Print orientation | Suggest another orientation if it clearly needs less support | warning | `orientation` |
+| Layout on the plates | All pieces fit one plate together (`part_spacing_mm` apart); otherwise the number of plates (print runs) is reported | warning | `layout` |
+| Layout made for this printer | parts.json `print_layout.bed_mm` and `spacing_mm` equal the current `build_volume_mm` and `part_spacing_mm` (otherwise rerun model.py) | major | `layout` |
+| Piece turned diagonally to fit | Reported for the print notes | info | `layout` |
 
 **Verdict:** FAIL if there is even one critical or major finding. PASS if there are only warnings (warnings go into the print notes).
 
@@ -38,6 +41,7 @@ Every number appears in `thresholds` in the `p3d.analyze` output; treat that as 
 - Entries in `overhang_regions` with `flat: true` and `bridge_span_mm ≤ max_bridge_mm` are expected to print as bridges (they are listed in `bridges`). But **a cantilevered horizontal face (supported on one side only) is not a bridge**. Look at the shape; if it is cantilevered, treat it as an overhang.
 - Wall thickness is measured by casting rays inward from random surface points. Near sharp corners it can read thinner than it is. Check the `location` with `p3d.measure --ray` or `--section`; if it is a corner false positive you may exclude it (state why in the evidence).
 - Overhangs are judged on the fused shape, and faces with "another face within 0.3 mm directly below" or "the point just below the face inside another part" are already excluded as supported (for example the underside of a front lip sitting on the base).
+- `layout` in analysis.json gives the plate count and, per piece, `plate`, `bed_turn_deg` and `bed_fit` (`fits`, `diagonal` or `too_big`).
 - Bed contact area is the total of downward flat faces at Z ≤ 0.2 mm. If the bottom floats even slightly (no face at Z=0), it is 0.
 - Things the measurements cannot catch (check by looking at the code and shape):
   - The top of horizontal holes (teardrop shaped? support needed above Ø8 mm)
