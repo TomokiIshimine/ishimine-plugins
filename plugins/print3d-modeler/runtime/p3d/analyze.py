@@ -22,7 +22,7 @@ import numpy as np
 import trimesh
 
 from .files import ANALYSIS_JSON, load_dir, write_json
-from .layout import DIAGONAL, fits_bed
+from .layout import DIAGONAL, fits_bed, is_current
 from .meshutil import boolean, direction_label, fuse, np_default, place_on_bed, round_list, transformed
 from .printer import load_printer
 
@@ -432,11 +432,13 @@ def _check_layout(pj: dict, lim: Limits, f: Findings) -> dict:
     lay = pj.get("print_layout")
     groups = pj["print_orientation"]["groups"]
     name, vol = lim.printer["name"], [float(v) for v in lim.volume]
-    if not lay or [float(v) for v in lay["bed_mm"]] != vol:
-        made_for = f"{lay['printer']} {'×'.join(f'{v:g}' for v in lay['bed_mm'])} mm" if lay else "no printer"
+    if not is_current(lay, lim.printer):
+        made_for = (f"{lay['printer']} {'×'.join(f'{v:g}' for v in lay['bed_mm'])} mm, {lay['spacing_mm']:g} mm apart"
+                    if lay else "no printer")
         f.add("major", f"The print layout was made for {made_for}, not for the current printer {name} "
-              f"{'×'.join(f'{v:g}' for v in vol)} mm", check="layout",
-              evidence=f"parts.json print_layout={lay and lay['bed_mm']}, printer={vol}",
+              f"{'×'.join(f'{v:g}' for v in vol)} mm, {float(lim.printer['part_spacing_mm']):g} mm apart", check="layout",
+              evidence=f"parts.json print_layout={lay and [lay['bed_mm'], lay['spacing_mm']]}, "
+                       f"printer={[vol, lim.printer['part_spacing_mm']]}",
               suggestion="Run model.py again so the pieces are laid out on the current printer's bed")
         return {"plates": None, "stale": True}
     if lay["plates"] > 1:

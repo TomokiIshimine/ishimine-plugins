@@ -20,6 +20,7 @@ from pathlib import Path
 import numpy as np
 import trimesh
 
+from .layout import is_current
 from .files import ANALYSIS_JSON, PARTS_JSON, load_mesh, print_stl, read_json
 from .printer import load_printer
 
@@ -45,7 +46,7 @@ def _layout_status(pj: dict, printer: dict) -> dict:
     """Whether parts.json was laid out for the current printer, and its plate count."""
     lay = pj.get("print_layout")
     vol = [float(v) for v in printer["build_volume_mm"]]
-    current = bool(lay) and [float(v) for v in lay["bed_mm"]] == vol
+    current = is_current(lay, printer)
     return {"plates": lay["plates"] if lay else 1, "pitch": lay["plate_pitch_mm"] if lay else 0.0,
             "bed": [float(v) for v in lay["bed_mm"]] if lay else vol, "current": current,
             "made_for": lay["printer"] if lay else None}

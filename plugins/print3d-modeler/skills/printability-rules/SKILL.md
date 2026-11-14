@@ -30,7 +30,7 @@ Every number appears in `thresholds` in the `p3d.analyze` output; treat that as 
 | Bridge | Downward horizontal faces with a short side of 10 mm or less print without support | warning (when exceeded) | `bridge` |
 | Print orientation | Suggest another orientation if it clearly needs less support | warning | `orientation` |
 | Layout on the plates | All pieces fit one plate together (`part_spacing_mm` apart); otherwise the number of plates (print runs) is reported | warning | `layout` |
-| Layout made for this printer | parts.json `print_layout.bed_mm` equals the current `build_volume_mm` (otherwise rerun model.py) | major | `layout` |
+| Layout made for this printer | parts.json `print_layout.bed_mm` and `spacing_mm` equal the current `build_volume_mm` and `part_spacing_mm` (otherwise rerun model.py) | major | `layout` |
 | Piece turned diagonally to fit | Reported for the print notes | info | `layout` |
 
 **Verdict:** FAIL if there is even one critical or major finding. PASS if there are only warnings (warnings go into the print notes).

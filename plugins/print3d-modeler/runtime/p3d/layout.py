@@ -176,6 +176,12 @@ def arrange(pieces: dict, bed, spacing: float) -> dict:
             "plate_pitch_mm": X + PLATE_GAP_MM, "pieces": {g: out[g] for g in pieces}}
 
 
+def is_current(layout: dict | None, printer: dict) -> bool:
+    """Whether a print_layout from parts.json was made with the printer's current bed and part spacing."""
+    return (bool(layout) and [float(v) for v in layout["bed_mm"]] == [float(v) for v in printer["build_volume_mm"]]
+            and float(layout["spacing_mm"]) == float(printer["part_spacing_mm"]))
+
+
 def placement_matrix(mesh, piece: dict, plate_pitch: float) -> np.ndarray:
     """4×4 matrix that turns a piece in print pose (bottom at Z=0) about Z and moves it to its spot on the plates."""
     R = np.eye(4)
