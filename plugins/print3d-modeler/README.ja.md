@@ -106,14 +106,16 @@ OK が出るまで 2〜5 を繰り返します。途中経過はすべて作業�
 | 「3Dで見せて」／`/print3d-modeler:view` | view | 3D ビューアを作り直して開く |
 | 「レビューし直して」／`/print3d-modeler:review` | review | 印刷可能性・要望充足のレビューだけ再実行 |
 | 「STLを出力して」／`/print3d-modeler:export` | export | 印刷の向きで 3MF / STL と印刷メモを書き出す |
-| 「プリンタは A1 mini です」／`/print3d-modeler:printer` | printer | 造形範囲・ノズル径・材料を設定 |
+| 「プリンタは A1 mini です」／`/print3d-modeler:printer` | printer | プリンタ機種（造形範囲・ノズル径・材料）を設定して覚える |
 | 「使い方を教えて」／`/print3d-modeler:help` | help | コマンド・作業の流れ・始め方を説明し、作業中のモデルも一覧で表示 |
 
 ## プリンタの設定
 
 - 対象は FDM 方式のみです。
 - 判定の既定値はノズル 0.4mm 前提です（肉厚 0.8mm 以上、オーバーハング 45° まで、ブリッジ 10mm まで、はめ合いのすき間 0.2〜0.4mm）。
-- 造形範囲の既定は 220×220×250mm です。主要機種のプリセット（Bambu Lab A1 / A1 mini / P1S / X1C、Prusa MK4 / CORE One / MINI+、Creality Ender-3 V3 / K1 など）があり、どの値も個別に変えられます。
+- 造形範囲の既定は 220×220×250mm です。Bambu Lab の主要機種（A1 mini、A1、P1P、P1S、P2S、X1 Carbon、X1E、X2D、H2S、H2D / H2D Pro、H2C、H3C。造形範囲は Bambu Lab の公式仕様ページの値）と、その他の人気機種（Prusa MK4 / CORE One / MINI+、Creality Ender-3 V3 / K1 など）のプリセットがあり、どの値も個別に変えられます。
+- プリンタ機種は一度伝えれば `print3d/printer.json` に保存され、次のモデルでも覚えています（プラグインのデータフォルダと、アプリにメモリー機能があれば Claude のメモリーに保存）。
+- 印刷用の配置はプリンタのベッドに合わせます。収まるなら 90° や斜めに回し、できるだけ 1 枚のプレートに並べます。1 枚に収まらないときはそう伝えてプレートごとに 3MF を書き出し、どの向きでも入らない部品があるときは警告して分割や縮小を提案します。
 
 ## 決まりごと
 
@@ -126,7 +128,7 @@ OK が出るまで 2〜5 を繰り返します。途中経過はすべて作業�
 
 ```
 print3d/
-├── printer.json         プリンタ設定（全モデル共通）
+├── printer.json         プリンタ設定（全モデル共通。無ければ覚えているプリンタを使う）
 └── small-house/
     ├── spec.md          要件（R1, R2…）とフィードバック
     ├── design.md        部位・寸法・印刷の向き

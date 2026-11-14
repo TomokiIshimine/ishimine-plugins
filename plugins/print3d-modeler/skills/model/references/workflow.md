@@ -13,7 +13,9 @@ Write everything the user reads in the user's language (see "Language" in SKILL.
    - Shape (required shapes, holes, grooves, text; look and feel)
    - Movement and assembly (lids, fits, hinges, screws; printed separately and assembled?)
    - Printing setup (printer model → build volume, nozzle size, material)
-2. Once you know the printer model, write `print3d/printer.json` (see the `printer` skill). If unknown, go ahead with the defaults (220×220×250 mm, 0.4 mm nozzle, PLA) and mark them as provisional in spec.md.
+2. Printer: before asking, run `cd RT && PY -m p3d.printer print3d` (the `print3d/` folder) and look at `source`.
+   - A `printer.json` file (in `print3d/` or the remembered printer): use it and just mention it ("Printing on your Bambu Lab A1 mini (180×180×180 mm)"). Ask only if the user hints at another printer.
+   - `"default"`: if your own memory has the user's printer, save it as the `printer` skill describes without asking. Otherwise ask for the printer model (offer the common Bambu Lab models: A1 mini / A1 / P1S·P2S / X1C, plus free text), then save it with `p3d.printer --save` (it is remembered for the next models). If the user does not know, go ahead with the defaults (220×220×250 mm, 0.4 mm nozzle, PLA) and mark them as provisional in spec.md.
 3. Create `DIR/spec.md` from `templates/spec.md`. One requirement per line with IDs R1, R2… (**never renumber**; strike cancelled requirements through with ~~strikethrough~~ and keep them). Give dimensional requirements a number and a tolerance.
 
 ## Step 2. Design → design.md
@@ -30,7 +32,7 @@ Write everything the user reads in the user's language (see "Language" in SKILL.
 - Put parameters (dimensions) as constants at the top of the file, with requirement IDs in comments.
 - Set `lang` in `LabeledModel(...)` to the conversation language (`"ja"` or `"en"`).
 - Overlap parts by 0.5–1 mm so they fuse reliably (the `EMBED` constant).
-- Use separate `print_group`s for pieces printed separately. Fit clearance is 0.2–0.4 mm per side (`clearance_mm` in printer.json).
+- Use separate `print_group`s for pieces printed separately. `build()` lays them out on the printer's bed (turning them about Z, diagonally if that is the only way a long piece fits) and puts what does not fit onto further plates; keep each piece within the build volume, and if the user wants everything in one print run, size the pieces so they fit one plate together. Fit clearance is 0.2–0.4 mm per side (`clearance_mm` in printer.json).
 - Horizontal holes (holes running sideways) need no support if the top is pointed at 45° (teardrop).
 - A large flat bottom makes printing stable. Do not fillet the edges of the bottom face (causes warping and detaching).
 - How to write build123d: `modeling-conventions/references/build123d-cheatsheet.md`.
@@ -42,6 +44,8 @@ cd DIR && PYTHONPATH=RT PY model.py
 ```
 
 - Look at `auto_check` and `critical_or_major` in the output JSON. **Fix obvious failures yourself and run again** (exceptions, not watertight, split bodies, exceeding the build volume) before going to step 5.
+- A piece too big for the printer (`build_volume`, critical) needs a decision: another print orientation, splitting it into pieces that are assembled, or scaling it down. Tell the user plainly that it does not fit their printer, with the size and the build volume, and ask with AskUserQuestion which way to go unless one is obviously right.
+- A `layout` warning means the pieces need more than one plate (print run). Tell the user how many and which pieces go together; it is fine if they accept it.
 - Check dimensions with `cd RT && PY -m p3d.measure DIR` (`--part id` `--section z=30` `--distance a b` `--ray x,y,z dx,dy,dz`).
 - Aim for one run to take under 30 seconds. If it is slow, revisit fillets, text and fine repeated shapes.
 

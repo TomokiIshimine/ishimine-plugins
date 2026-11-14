@@ -95,6 +95,7 @@ def viewer_data(pj: dict, analysis: dict, meshes: dict, lang: str | None = None)
         "overlays": group_overlays(pj, meshes, float(pr["overhang_limit_deg"])),
         "features": pj.get("features", []),
         "groups": groups,
+        "layout": {k: (pj.get("print_layout") or {}).get(k, v) for k, v in (("plates", 1), ("plate_pitch_mm", 0))},
     }
 
 

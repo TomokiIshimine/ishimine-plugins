@@ -125,8 +125,9 @@
   .dir { display: inline-flex; align-items: baseline; gap: 5px; font-weight: 700; font-size: 14px; padding: 3px 9px;
     border-radius: 5px; color: #fff; pointer-events: none; box-shadow: 0 1px 3px rgba(0, 0, 0, .25); }
   .dir small { font-size: 11px; font-weight: 600; opacity: .85; font-variant-numeric: tabular-nums; }
-  .coin { background: var(--surface); border: 1px solid var(--line); border-radius: 5px; padding: 1px 6px; font-size: 11px;
+  .coin, .plateTag { background: var(--surface); border: 1px solid var(--line); border-radius: 5px; padding: 1px 6px; font-size: 11px;
     color: var(--muted); white-space: nowrap; }
+  .plateTag { font-weight: 600; pointer-events: none; }
   #tip { position: absolute; z-index: 5; pointer-events: none; background: var(--surface); border: 1px solid var(--line);
     border-radius: var(--radius); padding: 8px 11px 9px; font-size: 12px; box-shadow: var(--shadow); display: none; max-width: 280px; }
   #tip .t { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; }
@@ -317,6 +318,7 @@ window.P3D_I18N = {
     dirs: { up: "Up", down: "Down", front: "Front", back: "Back", right: "Right", left: "Left" },
     gizmo: { up: "U", down: "D", front: "F", back: "B", right: "R", left: "L" },
     coin: "Coin (Ø20 mm)",
+    plate: (n) => `Plate ${n}`,
     nParts: (n) => `${n} ${n === 1 ? "part" : "parts"}`, only: "Show only this",
     onlyObj: "Show only this object", onlyPart: "Show only this part", toggleObj: "Expand / collapse",
     bbox: (s) => `Size ${s.join(" × ")} mm`,
@@ -344,6 +346,7 @@ window.P3D_I18N = {
     dirs: { up: "上", down: "下", front: "前", back: "後", right: "右", left: "左" },
     gizmo: { up: "上", down: "下", front: "前", back: "後", right: "右", left: "左" },
     coin: "1円玉（直径20mm）",
+    plate: (n) => `プレート ${n}`,
     nParts: (n) => `${n} パーツ`, only: "これだけ表示",
     onlyObj: "このオブジェクトだけ表示", onlyPart: "このパーツだけ表示", toggleObj: "開く／たたむ",
     bbox: (s) => `外形 ${s.join(" × ")} mm`,
@@ -533,19 +536,32 @@ function buildBed(mode, box) {
   bed.clear();
   const c = box.getCenter(new THREE.Vector3()), s = box.getSize(new THREE.Vector3());
   let w, d, cx = c.x, cy = c.y;
+  // Print pose: one bed per plate, side by side along X (pieces that do not fit one plate go on the next)
+  const centers = [];
   if (mode === "print") {
     [w, d] = M.printer.build_volume_mm; cx = 0; cy = 0;
-    const h = M.printer.build_volume_mm[2];
-    const vol = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(w, d, h)),
-      new THREE.LineDashedMaterial({ color: new THREE.Color(cssv("--volume")), dashSize: 4, gapSize: 3 }));
-    vol.position.set(0, 0, h / 2); vol.computeLineDistances(); bed.add(vol);
+    const h = M.printer.build_volume_mm[2], n = Math.max(1, M.layout.plates || 1);
+    for (let k = 0; k < n; k++) {
+      const x = k * M.layout.plate_pitch_mm;
+      centers.push(x);
+      const vol = new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(w, d, h)),
+        new THREE.LineDashedMaterial({ color: new THREE.Color(cssv("--volume")), dashSize: 4, gapSize: 3 }));
+      vol.position.set(x, 0, h / 2); vol.computeLineDistances(); bed.add(vol);
+      if (n > 1) {
+        const tag = new CSS2DObject(el("div", { className: "plateTag", textContent: L.plate(k + 1) }));
+        tag.position.set(x, -d / 2, 0); tag.center.set(0.5, -0.4); bed.add(tag);
+      }
+    }
   } else {
     w = d = Math.ceil((Math.max(s.x, s.y) * 1.8 + 30) / 10) * 10;
+    centers.push(cx);
   }
-  const plate = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshBasicMaterial({ color: new THREE.Color(cssv("--bed")),
-    transparent: true, opacity: .55, side: THREE.DoubleSide, depthWrite: false }));
-  plate.position.set(cx, cy, -0.05);
-  bed.add(plate, bedGrid(w, d, cx, cy, 10, cssv("--grid-minor"), .6), bedGrid(w, d, cx, cy, 50, cssv("--grid-major"), .7));
+  for (const x of centers) {
+    const plate = new THREE.Mesh(new THREE.PlaneGeometry(w, d), new THREE.MeshBasicMaterial({ color: new THREE.Color(cssv("--bed")),
+      transparent: true, opacity: .55, side: THREE.DoubleSide, depthWrite: false }));
+    plate.position.set(x, cy, -0.05);
+    bed.add(plate, bedGrid(w, d, x, cy, 10, cssv("--grid-minor"), .6), bedGrid(w, d, x, cy, 50, cssv("--grid-major"), .7));
+  }
   coin.position.set(Math.max(box.min.x - 18, cx - w / 2 + 12), Math.max(box.min.y - 18, cy - d / 2 + 12), 0);
 }
 // Grid lines every `step` mm across the bed, counted from the bed center (10 mm minor, 50 mm major)

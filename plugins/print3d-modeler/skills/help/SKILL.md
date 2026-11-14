@@ -54,7 +54,7 @@ Explain it for the user, not for Claude: leave out PY/RT, environment variables,
 | `/print3d-modeler:view [model name]` | "Show it in 3D" | Rebuilds and opens the 3D viewer |
 | `/print3d-modeler:review [model name]` | "Check whether it can be printed" | Reruns only the two independent reviews |
 | `/print3d-modeler:export [model name]` | "Give me the files to print" | Writes 3MF / STL in print orientation, plus print notes |
-| `/print3d-modeler:printer [printer or X×Y×Z]` | "My printer is an A1 mini" | Sets the build volume, nozzle size and material |
+| `/print3d-modeler:printer [printer or X×Y×Z]` | "My printer is an A1 mini" | Sets and remembers your printer (build volume, nozzle size, material); presets for the main Bambu Lab models and others |
 | `/print3d-modeler:help [topic]` | "How do I use this?" | This help |
 
 Commands are optional: asking in plain words works the same. Without a model name, `view`, `review` and `export` use the most recently updated model.
@@ -72,12 +72,12 @@ Good to know (mention when relevant, not all at once):
 
 - Directions always mean the model **as used**: up = away from the bed, front = the side you look at, left/right as seen from the front. The print orientation is handled separately.
 - Everything is saved in `print3d/<model name>/` in the folder you work in, so you can stop at any time and continue later.
-- FDM printers only. Defaults: 220×220×250 mm build volume, 0.4 mm nozzle, PLA. Set your own with `printer`.
+- FDM printers only. Defaults: 220×220×250 mm build volume, 0.4 mm nozzle, PLA. Set your own with `printer`; it is remembered, and pieces are laid out to fit your printer's bed (with a warning when they need more than one plate or do not fit at all).
 
 ## Your models (light check)
 
 Before answering the overview, look for existing work with Glob only (no Python, no setup): `print3d/*/spec.md` and `print3d/printer.json` under the folder the user picked (or the current working folder).
 
 - For each model found (newest first, at most 4): the folder name and the title in `spec.md`, and how far it got. Read only the last `## vN … step X` line of `history.md` (the step it ends on) and whether `out/final/` exists. Say "finished" if `out/final/` exists, otherwise name the step in words. `history.md` uses the `model` skill's numbering, which differs from the six steps above: 1 questions, 2 design, 3 writing the model, 4 build and self-check, 5 review, 6 your check in the viewer, 7 export. Do not show the step number itself.
-- Printer: the `preset` or `name` and build volume in `printer.json`, or "not set (defaults are used)".
+- Printer: the `preset` or `name` and build volume in `printer.json`, or, without that file, the printer you remember for the user (a remembered printer saved by `p3d.printer --save` may also apply) or "not set (defaults are used)".
 - If nothing is found, skip this section without comment.

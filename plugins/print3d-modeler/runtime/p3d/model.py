@@ -10,13 +10,13 @@ import numpy as np
 import trimesh
 
 from .files import PARTS_JSON, part_stl, print_stl, write_json
-from .meshutil import boolean, fuse, is_build123d, place_on_bed, round_list, to_trimesh
+from .layout import arrange, placement_matrix
+from .meshutil import boolean, fuse, is_build123d, place_on_bed, round_list, to_trimesh, transformed
 
 # No blues, so parts never get confused with the bed-contact highlight (blue)
 PALETTE = ["#F28E2B", "#59A14F", "#B07AA1", "#E15759", "#76B7B2",
            "#EDC948", "#9C755F", "#FF9DA7", "#8CD17D", "#BAB0AC"]
 ID_RE = re.compile(r"^[a-z][a-z0-9_]*$")
-LAYOUT_GAP_MM = 10.0
 
 
 @dataclass
@@ -182,27 +182,35 @@ class LabeledModel:
         trimesh.util.concatenate(list(meshes.values())).export(out / "model.stl")
         return self._export_step(out / "model.step")
 
-    def _write_print_outputs(self, d: Path, meshes: dict, groups: dict[str, list[Part]]) -> dict:
-        """out/print/<group>.stl: each group fused, rotated and laid out side by side along X. Returns the group info."""
-        placed = {}
+    def _write_print_outputs(self, d: Path, meshes: dict, groups: dict[str, list[Part]]) -> tuple[dict, dict]:
+        """out/print/<group>.stl: each group fused, rotated and laid out on the printer's bed (p3d.layout).
+
+        Returns (group info, layout summary for parts.json)."""
+        from .printer import load_printer   # imported here so `python -m p3d.printer` stays warning-free
+        printer = load_printer(d)
+        posed = {}
         for g, plist in groups.items():
             fused = fuse([meshes[p.id] for p in plist])
             cfg = self.group_orientation.get(g, self.print_orientation)
-            pm, _ = place_on_bed(fused, cfg["rotation_deg"])
-            placed[g] = (fused, cfg, float(pm.extents[0]))
-        total = sum(w for _, _, w in placed.values()) + LAYOUT_GAP_MM * (len(placed) - 1)
-        x = -total / 2
+            pm, M = place_on_bed(fused, cfg["rotation_deg"])
+            posed[g] = (pm, M, cfg)
+        lay = arrange({g: pm for g, (pm, _, _) in posed.items()}, printer["build_volume_mm"],
+                      printer["part_spacing_mm"])
         info = {}
-        for g, (fused, cfg, width) in placed.items():
-            pm, M = place_on_bed(fused, cfg["rotation_deg"], x_offset=x + width / 2)
-            x += width + LAYOUT_GAP_MM
+        for g, (pm, M, cfg) in posed.items():
+            piece = lay["pieces"][g]
+            P = placement_matrix(pm, piece, lay["plate_pitch_mm"])
+            pm, M = transformed(pm, P), P @ M
             pm.export(print_stl(d, g))
             info[g] = {"rotation_deg": cfg["rotation_deg"], "bed_face": cfg.get("bed_face", ""),
                        "matrix": [round_list(r, 6) for r in M], "parts": [p.id for p in groups[g]],
-                       "size_mm": round_list(pm.extents, 2)}
-        return info
+                       "size_mm": round_list(pm.extents, 2), "plate": piece["plate"],
+                       "bed_turn_deg": piece["turn_deg"], "bed_fit": piece["fit"]}
+        summary = {"printer": printer["name"], "bed_mm": lay["bed_mm"], "spacing_mm": lay["spacing_mm"],
+                   "plates": lay["plates"], "plate_pitch_mm": lay["plate_pitch_mm"]}
+        return info, summary
 
-    def _parts_json(self, meshes: dict, groups: dict, group_info: dict, step_ok: bool) -> dict:
+    def _parts_json(self, meshes: dict, groups: dict, group_info: dict, layout: dict, step_ok: bool) -> dict:
         parts = []
         for p in self.parts:
             m = meshes[p.id]
@@ -224,6 +232,7 @@ class LabeledModel:
             "front_axis": "-Y",
             "right_axis": "+X",
             "print_orientation": {**self.print_orientation, "groups": group_info},
+            "print_layout": layout,
             "objects": {g: self.object_labels.get(g, g) for g in groups},
             "print_note": self.print_note,
             "parts": parts,
@@ -258,12 +267,12 @@ class LabeledModel:
         meshes = self._part_meshes()
         step_ok = self._write_design_outputs(d, meshes)
         groups = self._groups()
-        group_info = self._write_print_outputs(d, meshes, groups)
+        group_info, layout = self._write_print_outputs(d, meshes, groups)
 
         # the previous parts.json is kept as out/parts.prev.json to detect unintended changes
         if (d / PARTS_JSON).exists():
             shutil.copy2(d / PARTS_JSON, out / "parts.prev.json")
-        write_json(d / PARTS_JSON, self._parts_json(meshes, groups, group_info, step_ok))
+        write_json(d / PARTS_JSON, self._parts_json(meshes, groups, group_info, layout, step_ok))
 
         from .analyze import BLOCKING, analyze_dir
         from .viewer import build_viewer
