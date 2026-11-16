@@ -109,8 +109,14 @@ def export_dir(d: str | Path) -> dict:
     else:
         for plate in sorted(plates):
             scene = trimesh.Scene()
+            used = set()
             for name, m in plates[plate]:
-                scene.add_geometry(m, node_name=name, geom_name=name)
+                # trimesh overwrites a node whose name is already taken, and labels need not be unique
+                node, k = name, 2
+                while node in used:
+                    node, k = f"{name} ({k})", k + 1
+                used.add(node)
+                scene.add_geometry(m, node_name=node, geom_name=node)
             suffix = f"_plate{plate}" if len(plates) > 1 else ""
             tmf = fin / f"{pj['model']}{suffix}.3mf"
             scene.export(tmf)

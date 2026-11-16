@@ -169,9 +169,9 @@ def _model_head() -> str:
             f'xmlns:BambuStudio="{BAMBU_NS}" xmlns:p="{PROD_NS}" requiredextensions="p">\n')
 
 
-def _object_file(mesh_id: int, name: str, verts: np.ndarray, faces: np.ndarray) -> str:
+def _object_file(k: int, mesh_id: int, name: str, verts: np.ndarray, faces: np.ndarray) -> str:
     out = [_model_head(), ' <metadata name="BambuStudio:3mfVersion">1</metadata>\n <resources>\n',
-           f'  <object id="{mesh_id}" p:UUID="{_uuid("mesh", name)}" type="model">\n   <mesh>\n    <vertices>\n']
+           f'  <object id="{mesh_id}" p:UUID="{_uuid("mesh", k, name)}" type="model">\n   <mesh>\n    <vertices>\n']
     out += [f'     <vertex x="{x:.6f}" y="{y:.6f}" z="{z:.6f}"/>\n' for x, y, z in verts]
     out.append('    </vertices>\n    <triangles>\n')
     out += [f'     <triangle v1="{a}" v2="{b}" v3="{c}"/>\n' for a, b, c in faces]
@@ -179,16 +179,16 @@ def _object_file(mesh_id: int, name: str, verts: np.ndarray, faces: np.ndarray) 
     return "".join(out)
 
 
-def write_project(path: str | Path, plates: list[list[tuple[str, object]]], project: dict, title: str = "") -> dict:
+def write_project(path: str | Path, plates: list[list[tuple[str, object]]], project: dict, title: str = "") -> list[dict]:
     """Write one Bambu Studio project 3MF holding every plate.
 
     plates[i] is the list of (name, trimesh mesh) on plate i + 1, each mesh already in that plate's bed coordinates
-    (front-left corner of the bed at 0, 0, bottom at Z = 0). Returns where each piece went:
-    {name: {"plate", "plate_origin_mm", "position_mm"}}.
+    (front-left corner of the bed at 0, 0, bottom at Z = 0). Names need not be unique. Returns where each piece went, in input order:
+    [{"name", "plate", "plate_origin_mm", "position_mm"}].
     """
     path = Path(path)
     bed = project["bed_mm"]
-    root_objects, build_items, rels, config_objects, config_plates, placed = [], [], [], [], [], {}
+    root_objects, build_items, rels, config_objects, config_plates, placed = [], [], [], [], [], []
     files = {}
     k = 0
     for p, pieces in enumerate(plates):
@@ -201,7 +201,7 @@ def write_project(path: str | Path, plates: list[list[tuple[str, object]]], proj
             lo, hi = v.min(0), v.max(0)
             c = np.array([(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, 0.0])
             obj_path = f"/3D/Objects/object_{k}.model"
-            files[obj_path[1:]] = _object_file(mesh_id, name, v - c, np.asarray(mesh.faces, dtype=int))
+            files[obj_path[1:]] = _object_file(k, mesh_id, name, v - c, np.asarray(mesh.faces, dtype=int))
             rels.append(f' <Relationship Target="{obj_path}" Id="rel-{k}" Type="{MODEL_REL}"/>\n')
             root_objects.append(
                 f'  <object id="{obj_id}" p:UUID="{_uuid("object", k, name)}" type="model">\n   <components>\n'
@@ -221,8 +221,8 @@ def write_project(path: str | Path, plates: list[list[tuple[str, object]]], proj
             instances.append(f'    <model_instance>\n      <metadata key="object_id" value="{obj_id}"/>\n'
                              f'      <metadata key="instance_id" value="0"/>\n'
                              f'      <metadata key="identify_id" value="{100 + k}"/>\n    </model_instance>\n')
-            placed[name] = {"plate": p + 1, "plate_origin_mm": [round(ox, 3), round(oy, 3)],
-                            "position_mm": [round(float(c[0]), 2), round(float(c[1]), 2)]}
+            placed.append({"name": name, "plate": p + 1, "plate_origin_mm": [round(ox, 3), round(oy, 3)],
+                           "position_mm": [round(float(c[0]), 2), round(float(c[1]), 2)]})
         config_plates.append(f'  <plate>\n    <metadata key="plater_id" value="{p + 1}"/>\n'
                              f'    <metadata key="plater_name" value=""/>\n'
                              f'    <metadata key="locked" value="false"/>\n' + "".join(instances) + '  </plate>\n')
