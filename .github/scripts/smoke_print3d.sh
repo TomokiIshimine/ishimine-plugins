@@ -108,6 +108,20 @@ assert gap >= 6.0 - 1e-6, f"pieces closer than part_spacing_mm: {gap}"
 pin = trimesh.creation.cylinder(radius=2, height=24, sections=32)
 pin.apply_transform(trimesh.transformations.rotation_matrix(1.5708, (1, 0, 0)))
 assert abs(outline_xy(pin).area - 96) < 2, outline_xy(pin).area
+# overhangs: a 10 x 10 mm stem under a 60 x 60 mm cap is packed by the cap, not by the face on the bed
+stem = trimesh.creation.box((10, 10, 20)); stem.apply_translation((0, 0, 10))
+cap = trimesh.creation.box((60, 60, 5)); cap.apply_translation((0, 0, 22.5))
+mush = trimesh.boolean.union([stem, cap])
+assert abs(outline_xy(mush).area - 3600) < 5, outline_xy(mush).area
+caps = {f"m{i}": mush.copy() for i in range(4)}
+r2 = arrange(caps, (180, 180, 180), 6.0)
+tops = []
+for g, m in caps.items():
+    m = m.copy()
+    m.apply_transform(placement_matrix(m, r2["pieces"][g], r2["plate_pitch_mm"]))
+    tops.append(outline_xy(m))
+gap2 = min(a.distance(b) for a, b in itertools.combinations(tops, 2))
+assert gap2 >= 6.0 - 1e-6, f"overhanging caps closer than part_spacing_mm: {gap2}"
 print("nesting ok", {g: p["turn_deg"] for g, p in r["pieces"].items()}, "gap", round(gap, 2))
 PY
 end

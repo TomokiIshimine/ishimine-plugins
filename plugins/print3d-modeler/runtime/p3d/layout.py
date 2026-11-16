@@ -3,7 +3,8 @@
 Each piece (print_group) keeps the print orientation set in model.py. The layout only turns a piece about Z,
 which changes nothing about overhangs or bed contact, and moves it on the bed:
 
-  1. each piece's real outline seen from above is taken (holes and notches included, not just its bounding box),
+  1. each piece's real outline seen from above is taken: the whole solid projected onto the bed, so parts that
+     overhang beyond the bed contact face count too (holes and notches included, not just its bounding box),
      grown by half of part_spacing_mm, and drawn on a grid of about 1 mm at every turn in 5° steps
   2. pieces are placed one by one, largest first, on the first plate where they fit: at every turn and every free
      spot, the one that keeps the plate's used area smallest wins, so L shapes nest into each other and small
