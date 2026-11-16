@@ -34,7 +34,7 @@ so also keep the printer in your own memory if you have one (see step 5).
 2. Find the preset:
    - `cd RT && PY -m p3d.printer --find "<what the user said>"` (e.g. `"A1 mini"`, `"P1S"`, `"X1 Carbon"`, `"H2D"`)
    - Full list: `cd RT && PY -m p3d.printer --presets`. Bambu Lab: A1 mini, A1, P1P, P1S, P2S, X1 Carbon, X1E, X2D,
-     H2S, H2D / H2D Pro, H2C, H3C (checked against bambulab.com in November 2026). Also Prusa, Creality, ELEGOO, Anycubic.
+     H2S, H2D, H2D Pro, H2C, H3C (checked against bambulab.com in November 2026). Also Prusa, Creality, ELEGOO, Anycubic.
    - Several matches, or only "Bambu" without a model: ask with AskUserQuestion (up to 4 likely models plus free text).
    - Not in the presets: ask for the build volume in mm (X left-right × Y front-back × Z height), from the maker's spec page.
 3. Two-nozzle printers (X2D, H2D, H2C): `build_volume_mm` is the single-nozzle printing area. If the user prints

@@ -83,5 +83,41 @@ step "p3d.export"
 end
 need out/final/phone-stand.3mf out/final/phone-stand_main.stl
 
+step "p3d.export (Bambu Lab printer: Bambu Studio project with plates)"
+echo '{"preset": "bambu-a1"}' > "${M}/printer.json"
+(cd "$M" && PYTHONPATH="$RT" "$PY" model.py) > /dev/null
+"$PY" -m p3d.export "$M" > "${WORK}/export-bambu.json"
+"$PY" - "${M}/out/final/phone-stand.3mf" "${WORK}/export-bambu.json" <<'PY'
+import json, re, sys, zipfile
+import trimesh
+from p3d.bambu import plate_origin, project_for, write_project
+
+z = zipfile.ZipFile(sys.argv[1])
+names = set(z.namelist())
+for f in ("3D/3dmodel.model", "3D/_rels/3dmodel.model.rels", "Metadata/model_settings.config", "Metadata/project_settings.config"):
+    assert f in names, f"missing {f}: {sorted(names)}"
+root = z.read("3D/3dmodel.model").decode()
+assert '<metadata name="Application">BambuStudio-' in root, "Bambu Studio reads plates only from its own projects"
+ps = json.loads(z.read("Metadata/project_settings.config"))
+assert ps["printer_settings_id"] == "Bambu Lab A1 0.4 nozzle" and ps["print_settings_id"] == "0.20mm Standard @BBL A1", ps
+assert z.read("Metadata/model_settings.config").decode().count("<plate>") == 1
+r = json.load(open(sys.argv[2]))
+assert r["files"]["3mf"] == ["out/final/phone-stand.3mf"] and r["slicer_project"], r
+
+# two plates of an A1 (256 mm bed): Bambu Studio draws plate 2 at x = 256 * 1.2, plate 3 below plate 1 (2 columns)
+assert plate_origin(1, 2, (256, 256)) == (307.2, 0.0) and plate_origin(2, 4, (256, 256)) == (0.0, -307.2)
+box = trimesh.creation.box((40, 30, 10))
+box.apply_translation((128, 128, 5))
+out = sys.argv[1].replace(".3mf", "_two.3mf")
+write_project(out, [[("a", box)], [("b", box.copy())]], project_for({"preset": "bambu-a1", "nozzle_mm": 0.4}))
+z = zipfile.ZipFile(out)
+items = re.findall(r'<item [^>]*transform="1 0 0 0 1 0 0 0 1 ([-\d.]+) ([-\d.]+) ', z.read("3D/3dmodel.model").decode())
+assert [tuple(map(float, i)) for i in items] == [(128.0, 128.0), (435.2, 128.0)], items
+cfg = z.read("Metadata/model_settings.config").decode()
+assert cfg.count("<plate>") == 2 and '<metadata key="plater_id" value="2"/>' in cfg
+print("Bambu Studio project ok")
+PY
+end
+
 echo
 echo "print3d-modeler smoke test passed"
