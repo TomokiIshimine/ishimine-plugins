@@ -83,6 +83,35 @@ step "p3d.export"
 end
 need out/final/phone-stand.3mf out/final/phone-stand_main.stl
 
+step "p3d.layout (concave pieces nest on one plate)"
+"$PY" - <<'PY'
+import itertools
+import trimesh
+from shapely.geometry import Polygon
+from p3d.layout import arrange, outline_xy, placement_matrix
+
+# two L shapes of 200 x 200 mm (arms 40 mm wide): side by side they need two 256 mm plates, nested they fit one
+L = Polygon([(0, 0), (200, 0), (200, 40), (40, 40), (40, 200), (0, 200)])
+pieces = {"l1": trimesh.creation.extrude_polygon(L, 5), "l2": trimesh.creation.extrude_polygon(L, 5)}
+r = arrange(pieces, (256, 256, 256), 6.0)
+assert r["plates"] == 1, r
+placed = []
+for g, m in pieces.items():
+    m = m.copy()
+    m.apply_transform(placement_matrix(m, r["pieces"][g], r["plate_pitch_mm"]))
+    lo, hi = m.bounds
+    assert lo[0] >= -128.01 and lo[1] >= -128.01 and hi[0] <= 128.01 and hi[1] <= 128.01, (g, m.bounds)
+    placed.append(outline_xy(m))
+gap = min(a.distance(b) for a, b in itertools.combinations(placed, 2))
+assert gap >= 6.0 - 1e-6, f"pieces closer than part_spacing_mm: {gap}"
+# a pin lying on its side: its outline from above is the full 24 x 4 mm rectangle, not slivers
+pin = trimesh.creation.cylinder(radius=2, height=24, sections=32)
+pin.apply_transform(trimesh.transformations.rotation_matrix(1.5708, (1, 0, 0)))
+assert abs(outline_xy(pin).area - 96) < 2, outline_xy(pin).area
+print("nesting ok", {g: p["turn_deg"] for g, p in r["pieces"].items()}, "gap", round(gap, 2))
+PY
+end
+
 step "p3d.export (two objects with the same label on one plate)"
 D="${WORK}/same-label"
 rm -rf "$D" && mkdir -p "$D"
