@@ -20,7 +20,7 @@ Every number appears in `thresholds` in the `p3d.analyze` output; treat that as 
 |---|---|---|---|
 | Mesh is closed (watertight, manifold) | No holes, flipped faces or self-intersections | critical | `watertight` |
 | A piece printed in one go is a single connected body | `bodies == 1` (per group) | critical | `bodies` |
-| Fits the build volume | Within the printer's `build_volume_mm`, turned about Z at any angle (the layout turns it 90° or diagonally when needed) | critical | `build_volume` |
+| Fits the build volume | Within the printer's `build_volume_mm`, turned about Z at any angle (the layout turns pieces about Z at any angle to pack them) | critical | `build_volume` |
 | Has a flat face on the bed | Contact area > 0 | critical | `bed_contact` |
 | Stable on the bed | Contact area ≥ 50 mm² and center of mass inside the contact area | major | `bed_contact` |
 | Minimum wall thickness | Nozzle × 2 (0.8 mm) or more | major | `wall_thickness` |
