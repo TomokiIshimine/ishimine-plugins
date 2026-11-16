@@ -32,7 +32,7 @@ Write everything the user reads in the user's language (see "Language" in SKILL.
 - Put parameters (dimensions) as constants at the top of the file, with requirement IDs in comments.
 - Set `lang` in `LabeledModel(...)` to the conversation language (`"ja"` or `"en"`).
 - Overlap parts by 0.5–1 mm so they fuse reliably (the `EMBED` constant).
-- Use separate `print_group`s for pieces printed separately. `build()` lays them out on the printer's bed (turning them about Z at any angle and packing their real outlines, so concave pieces nest) and puts what does not fit onto further plates; keep each piece within the build volume, and if the user wants everything in one print run, size the pieces so they fit one plate together. Fit clearance is 0.2–0.4 mm per side (`clearance_mm` in printer.json).
+- Use separate `print_group`s for pieces printed separately. `build()` lays them out on the printer's bed (turning them about Z at any angle and packing their real outlines, i.e. the whole piece seen from above including overhangs, so concave pieces nest) and puts what does not fit onto further plates; keep each piece within the build volume, and if the user wants everything in one print run, size the pieces so they fit one plate together. Fit clearance is 0.2–0.4 mm per side (`clearance_mm` in printer.json).
 - Horizontal holes (holes running sideways) need no support if the top is pointed at 45° (teardrop).
 - A large flat bottom makes printing stable. Do not fillet the edges of the bottom face (causes warping and detaching).
 - How to write build123d: `modeling-conventions/references/build123d-cheatsheet.md`.
