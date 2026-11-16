@@ -3,7 +3,7 @@
 <!-- Write this file in the user's language (translate the headings too). -->
 
 ## Files
-- 3MF: `out/final/<model>.3mf` (load it straight into your slicer; orientation is already set)
+- 3MF: `out/final/<model>.3mf` (load it straight into your slicer; orientation is already set. With a Bambu Lab printer it is a Bambu Studio project holding every plate)
 - STL: `out/final/<model>_<group>.stl`
 
 ## Print orientation

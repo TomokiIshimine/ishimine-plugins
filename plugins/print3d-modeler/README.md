@@ -113,9 +113,9 @@ The viewer UI is available in English and Japanese.
 
 - FDM printers only.
 - Default thresholds assume a 0.4 mm nozzle: walls at least 0.8 mm, overhangs up to 45°, bridges up to 10 mm, fit clearance 0.2–0.4 mm.
-- The build volume defaults to 220×220×250 mm. Presets cover the main Bambu Lab printers (A1 mini, A1, P1P, P1S, P2S, X1 Carbon, X1E, X2D, H2S, H2D / H2D Pro, H2C, H3C; volumes from Bambu Lab's spec pages) and other popular printers (Prusa MK4 / CORE One / MINI+, Creality Ender-3 V3 / K1, and others). Any value can be overridden.
+- The build volume defaults to 220×220×250 mm. Presets cover the main Bambu Lab printers (A1 mini, A1, P1P, P1S, P2S, X1 Carbon, X1E, X2D, H2S, H2D, H2D Pro, H2C, H3C; volumes from Bambu Lab's spec pages) and other popular printers (Prusa MK4 / CORE One / MINI+, Creality Ender-3 V3 / K1, and others). Any value can be overridden.
 - Tell Claude your printer once: it is saved in `print3d/printer.json` and remembered for your next models (in the plugin's data folder, and in Claude's memory where the app has one).
-- Pieces are laid out on your printer's bed for printing: turned 90° or diagonally when that is what makes them fit, and packed onto one plate when they can be. If they need more than one plate, Claude tells you and exports one 3MF per plate; if a piece does not fit your printer at all, Claude warns you and suggests splitting or scaling it.
+- Pieces are laid out on your printer's bed for printing: turned 90° or diagonally when that is what makes them fit, and packed onto one plate when they can be. If they need more than one plate, Claude tells you; with a Bambu Lab printer the 3MF is a Bambu Studio project that holds every plate (open it in Bambu Studio or OrcaSlicer and each piece is on its plate, with your printer selected), and with other printers you get one 3MF per plate; if a piece does not fit your printer at all, Claude warns you and suggests splitting or scaling it.
 
 ## Conventions
 

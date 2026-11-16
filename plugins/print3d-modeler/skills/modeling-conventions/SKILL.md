@@ -65,7 +65,7 @@ print3d/
         ├── parts/<id>.stl                      per part (design pose)
         ├── print/<group>.stl                   print pose (fused per group, laid out on the printer's plates)
         ├── parts.prev.json                     previous part definitions (requirements-reviewer uses it to spot unintended changes)
-        └── final/<model>.3mf, <model>_<group>.stl  final output (export; <model>_plate<N>.3mf when it needs several plates)
+        └── final/<model>.3mf, <model>_<group>.stl  final output (export; Bambu Lab printers: one Bambu Studio project with every plate; others: <model>_plate<N>.3mf when it needs several plates)
 ```
 
 `parts.json` is generated from model.py, so never edit it by hand. To change part names or dimensions, fix model.py and run it again.

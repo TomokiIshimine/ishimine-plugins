@@ -13,7 +13,7 @@ skills/      model (entry), resume, view, review, export, printer, help    user-
              modeling-conventions, printability-rules                       internal rule books (user-invocable: false)
 agents/      printability-reviewer, requirements-reviewer                  read-only, reply with JSON only
 runtime/     setup_env.sh, requirements.txt                                 venv in $CLAUDE_PLUGIN_DATA or ~/.print3d-modeler
-             p3d/ model.py (LabeledModel), analyze.py, measure.py, export.py, printer.py, layout.py, viewer.py, meshutil.py
+             p3d/ model.py (LabeledModel), analyze.py, measure.py, export.py, printer.py, layout.py, bambu.py, viewer.py, meshutil.py
              viewer/viewer_template.html + vendor/three-bundle.partNN.js    single-file offline viewer (three.js inlined)
 ```
 
@@ -26,6 +26,7 @@ These are decided with the maintainer and are relied on by the skills, the revie
 - **Coordinates:** millimeters, right-handed, **up = +Z (Z = 0 is the bed), front = −Y, right = +X**. Direction labels are written `"up (+Z)"`, `"front (-Y)"` and so on (`meshutil.DIRECTION_LABELS`).
 - **Design pose vs print pose:** models are built and reported in the pose they are used in. The print orientation is stored separately as rotations about fixed X, then Y, then Z (`set_print_orientation`, `meshutil.rotation_matrix`) and applied only to `out/print/` and the final export. After it, `p3d.layout` may only turn a piece about Z and move it on the printer's plates; the group `matrix` in parts.json includes both.
 - **Printer settings:** `printer.json` in the model folder, then `print3d/`, then the remembered printer (`printer.json` next to the runtime venv, written by `p3d.printer --save`), then defaults. Bambu Lab preset volumes follow bambulab.com spec pages; for two-nozzle printers `build_volume_mm` is the single-nozzle area.
+- **Bambu Studio projects:** for Bambu Lab presets, `p3d.export` writes `out/final/<model>.3mf` as a Bambu Studio project (`p3d/bambu.py`): Application metadata `BambuStudio-…`, `Metadata/model_settings.config` with one `<plate>` per plate, `Metadata/project_settings.config` naming system presets only, and each build item at its plate's origin on Bambu Studio's plate grid (stride 1.2 × the bed, `ceil(sqrt(n))` columns). Bambu Studio drops the plates of any 3MF without these. Preset names and beds in `bambu.PRINTERS` follow `resources/profiles/BBL` of the BambuStudio repository; a preset added to `printer.PRESETS` for a Bambu Lab printer needs a row there too.
 - **FDM thresholds** default to a 0.4 mm nozzle and PLA: walls ≥ 2 × nozzle, details ≥ nozzle, overhang ≤ 45°, bridge ≤ 10 mm, fit clearance 0.2–0.4 mm, bed contact ≥ 50 mm². `printer.json` (model folder, then `print3d/`) overrides them.
 - **Language:** plugin text is English. Labels, `key_dims` names and user-facing files are in the user's language. Identifiers stay English: part ids, file names, JSON keys, requirement IDs (`R1`…), severities, and the `## vN … step X` lines in `history.md`. The viewer UI supports `en` and `ja`.
 
