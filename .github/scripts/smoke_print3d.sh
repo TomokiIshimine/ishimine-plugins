@@ -104,6 +104,10 @@ for g, m in pieces.items():
     placed.append(outline_xy(m))
 gap = min(a.distance(b) for a, b in itertools.combinations(placed, 2))
 assert gap >= 6.0 - 1e-6, f"pieces closer than part_spacing_mm: {gap}"
+# a pin lying on its side: its outline from above is the full 24 x 4 mm rectangle, not slivers
+pin = trimesh.creation.cylinder(radius=2, height=24, sections=32)
+pin.apply_transform(trimesh.transformations.rotation_matrix(1.5708, (1, 0, 0)))
+assert abs(outline_xy(pin).area - 96) < 2, outline_xy(pin).area
 print("nesting ok", {g: p["turn_deg"] for g, p in r["pieces"].items()}, "gap", round(gap, 2))
 PY
 end

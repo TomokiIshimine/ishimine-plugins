@@ -82,18 +82,31 @@ def fits_bed(mesh, bed) -> bool:
 
 
 # --------------------------------------------------------------------- outline packing on a grid
+MAX_OUTLINE_FACES = 300_000     # above this the convex hull stands in for the outline (keeps build() quick)
+
+
 def outline_xy(mesh):
-    """Outline of the mesh seen from above (shapely), holes that go all the way through kept; convex hull if
-    the projection fails."""
+    """Outline of the mesh seen from above (shapely): the union of its upward-facing triangles, so notches and
+    holes that go all the way through are kept. The convex hull stands in when that fails or the mesh is huge."""
+    import shapely
     from shapely.geometry import MultiPoint
+    hull = MultiPoint(hull_xy(mesh)).convex_hull
     try:
-        from trimesh.path.polygons import projected
-        poly = projected(mesh, normal=(0, 0, 1))
-        if poly is not None and not poly.is_empty and poly.area > 0:
-            return poly.buffer(0)
+        faces = np.asarray(mesh.faces)
+        if len(faces) > MAX_OUTLINE_FACES:
+            return hull
+        up = np.asarray(mesh.face_normals)[:, 2] > 1e-9   # a closed mesh's top faces cover its whole outline
+        t = np.asarray(mesh.vertices)[faces[up]][:, :, :2]
+        e1, e2 = t[:, 1] - t[:, 0], t[:, 2] - t[:, 0]
+        area = e1[:, 0] * e2[:, 1] - e2[:, 0] * e1[:, 1]
+        t = t[np.abs(area) > 1e-9]
+        if not len(t):
+            return hull
+        poly = shapely.union_all(shapely.polygons(np.concatenate([t, t[:, :1]], axis=1)), grid_size=0.01)
+        poly = poly.buffer(0.01).buffer(-0.01)            # close hairline seams between triangles
+        return poly if poly.area > 1e-6 else hull
     except Exception:
-        pass
-    return MultiPoint(hull_xy(mesh)).convex_hull
+        return hull
 
 
 class _Shape:
