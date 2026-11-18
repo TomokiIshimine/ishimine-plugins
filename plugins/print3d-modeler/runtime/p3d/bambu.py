@@ -8,7 +8,9 @@ and OrcaSlicer add plates through their own files inside the package, and they o
                                 of plate 1 (so the pieces of plate 2 end up on plate 1)
   3D/Objects/object_<k>.model   one mesh per piece (3MF Production extension: the root model refers to it as a component)
   3D/_rels/3dmodel.model.rels   relationships to the object files
-  Metadata/model_settings.config  per object: name and filament; per plate: <plate> with plater_id and the objects on it
+  Metadata/model_settings.config  per object: name and filament (`extruder`, 1-based), and one <part> per mesh of the
+                                object with its own `extruder` in multi-color pieces; per plate: <plate> with
+                                plater_id and the objects on it
   Metadata/project_settings.config  printer, process and filament presets (JSON). Without it Bambu Studio loads the
                                 geometry only and drops the plates
 
@@ -22,6 +24,11 @@ printers is wider than the area one nozzle reaches.
 project_settings.config names system presets only (printer, process, filament) and lists no changed settings, so Bambu
 Studio takes every value from its own presets (PresetCollection::load_external_preset) and changes nothing else.
 Preset names follow resources/profiles/BBL in the BambuStudio repository (profile version 02.09, November 2026).
+
+Multi-color: one object per printed piece, holding one part (volume) per filament with that filament's number as its
+`extruder`; filament_settings_id and filament_colour list the project's filaments 1..N (inherits_group and
+different_settings_to_system then have N + 2 entries: process, filaments, printer). The filaments are the project's,
+not AMS slots: Bambu Studio maps them to the loaded filaments when the job is sent.
 """
 from __future__ import annotations
 
@@ -33,6 +40,8 @@ from datetime import date
 from pathlib import Path
 
 import numpy as np
+
+from .bambu_filaments import FILAMENT_PRESETS
 
 PLATE_GAP = 1 / 5                       # Bambu Studio LOGICAL_PART_PLATE_GAP
 APPLICATION = "BambuStudio-02.00.00.00"  # oldest version with today's project layout; newer apps open it without a warning
@@ -110,12 +119,39 @@ PRINTERS = {
 }
 
 
+# filaments the AMS of each printer can hold at once: one AMS lite (4) on the A1 series, up to four AMS units (16) on
+# the others
+MAX_FILAMENTS = {"bambu-a1-mini": 4, "bambu-a1": 4}
+MAX_FILAMENTS_DEFAULT = 16
+
+
+def max_filaments(printer: dict) -> int | None:
+    """How many filaments a Bambu Lab printer's AMS can feed in one print, or None for other printers."""
+    key = printer.get("preset") or ""
+    return MAX_FILAMENTS.get(key, MAX_FILAMENTS_DEFAULT) if key in PRINTERS else None
+
+
+def filament_preset(printer: dict, material: str | None) -> str | None:
+    """System filament preset for a material on a Bambu Lab printer and nozzle (None: no preset for it there).
+
+    PLA, and no material, give the printer profile's default filament (Bambu PLA Basic)."""
+    spec = PRINTERS.get(printer.get("preset") or "")
+    if spec is None:
+        return None
+    nozzle = round(float(printer.get("nozzle_mm", 0.4)), 1)
+    if nozzle not in spec["nozzles"]:
+        return None
+    if material in (None, "PLA"):
+        return spec["nozzles"][nozzle][1]
+    return FILAMENT_PRESETS.get(printer["preset"], {}).get(nozzle, {}).get(material)
+
+
 def project_for(printer: dict) -> dict | None:
     """Bambu Studio project settings for a resolved printer, or None when it is not a known Bambu Lab printer/nozzle.
 
     Returns {"printer_model", "printer_preset", "print_preset", "filament_preset", "bed_mm", "area_origin_mm"};
     area_origin_mm is where the printer's build_volume_mm starts on the Bambu bed (the area both nozzles reach is
-    not at x = 0).
+    not at x = 0). Add "filaments": [{"preset", "color"}, ...] for more than one filament or another color.
     """
     spec = PRINTERS.get(printer.get("preset") or "")
     if spec is None:
@@ -169,21 +205,32 @@ def _model_head() -> str:
             f'xmlns:BambuStudio="{BAMBU_NS}" xmlns:p="{PROD_NS}" requiredextensions="p">\n')
 
 
-def _object_file(k: int, mesh_id: int, name: str, verts: np.ndarray, faces: np.ndarray) -> str:
-    out = [_model_head(), ' <metadata name="BambuStudio:3mfVersion">1</metadata>\n <resources>\n',
-           f'  <object id="{mesh_id}" p:UUID="{_uuid("mesh", k, name)}" type="model">\n   <mesh>\n    <vertices>\n']
+def _mesh_xml(mesh_id: int, uid: str, verts: np.ndarray, faces: np.ndarray) -> list[str]:
+    out = [f'  <object id="{mesh_id}" p:UUID="{uid}" type="model">\n   <mesh>\n    <vertices>\n']
     out += [f'     <vertex x="{x:.6f}" y="{y:.6f}" z="{z:.6f}"/>\n' for x, y, z in verts]
     out.append('    </vertices>\n    <triangles>\n')
     out += [f'     <triangle v1="{a}" v2="{b}" v3="{c}"/>\n' for a, b, c in faces]
-    out.append('    </triangles>\n   </mesh>\n  </object>\n </resources>\n <build/>\n</model>\n')
+    out.append('    </triangles>\n   </mesh>\n  </object>\n')
+    return out
+
+
+def _object_file(meshes: list[tuple[int, str, np.ndarray, np.ndarray]]) -> str:
+    """One object file holding the meshes (mesh_id, uuid, vertices, faces) of one printed piece."""
+    out = [_model_head(), ' <metadata name="BambuStudio:3mfVersion">1</metadata>\n <resources>\n']
+    for mesh_id, uid, verts, faces in meshes:
+        out += _mesh_xml(mesh_id, uid, verts, faces)
+    out.append(' </resources>\n <build/>\n</model>\n')
     return "".join(out)
 
 
-def write_project(path: str | Path, plates: list[list[tuple[str, object]]], project: dict, title: str = "") -> list[dict]:
+def write_project(path: str | Path, plates: list[list[tuple]], project: dict, title: str = "") -> list[dict]:
     """Write one Bambu Studio project 3MF holding every plate.
 
-    plates[i] is the list of (name, trimesh mesh) on plate i + 1, each mesh already in that plate's bed coordinates
-    (front-left corner of the bed at 0, 0, bottom at Z = 0). Names need not be unique. Returns where each piece went, in input order:
+    plates[i] is the list of pieces on plate i + 1, each mesh already in that plate's bed coordinates (front-left
+    corner of the bed at 0, 0, bottom at Z = 0). A piece is (name, trimesh mesh), printed with filament 1, or
+    (name, mesh, volumes) with volumes = [(part name, filament number 1..N, mesh), ...] that make up the piece
+    (multi-color: one volume per filament). Names need not be unique. project["filaments"], when present, lists the
+    project's filaments [{"preset", "color"}, ...]. Returns where each piece went, in input order:
     [{"name", "plate", "plate_origin_mm", "position_mm"}].
     """
     path = Path(path)
@@ -191,33 +238,48 @@ def write_project(path: str | Path, plates: list[list[tuple[str, object]]], proj
     root_objects, build_items, rels, config_objects, config_plates, placed = [], [], [], [], [], []
     files = {}
     k = 0
+    next_id = 0
     for p, pieces in enumerate(plates):
         ox, oy = plate_origin(p, len(plates), bed)
         instances = []
-        for name, mesh in pieces:
+        for piece in pieces:
+            name, mesh = piece[0], piece[1]
+            volumes = piece[2] if len(piece) > 2 and piece[2] else [(name, 1, mesh)]
             k += 1
-            mesh_id, obj_id = 2 * k - 1, 2 * k
             v = np.asarray(mesh.vertices, dtype=float)
             lo, hi = v.min(0), v.max(0)
             c = np.array([(lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, 0.0])
             obj_path = f"/3D/Objects/object_{k}.model"
-            files[obj_path[1:]] = _object_file(k, mesh_id, name, v - c, np.asarray(mesh.faces, dtype=int))
+            meshes, components, parts = [], [], []
+            for j, (vname, extruder, vmesh) in enumerate(volumes):
+                next_id += 1
+                mesh_id = next_id
+                tag = (k, name) if len(volumes) == 1 else (k, name, j)   # one-volume pieces keep their old UUIDs
+                meshes.append((mesh_id, _uuid("mesh", *tag), np.asarray(vmesh.vertices, dtype=float) - c,
+                               np.asarray(vmesh.faces, dtype=int)))
+                components.append(f'    <component p:path="{obj_path}" objectid="{mesh_id}" '
+                                  f'p:UUID="{_uuid("component", *tag)}" transform="{IDENTITY}"/>\n')
+                # a part's own extruder only counts when the object has several parts (Bambu Studio drops it otherwise)
+                ext = f'      <metadata key="extruder" value="{int(extruder)}"/>\n' if len(volumes) > 1 else ""
+                parts.append(f'    <part id="{mesh_id}" subtype="normal_part">\n'
+                             f'      <metadata key="name" value="{_esc(vname)}"/>\n'
+                             f'      <metadata key="matrix" value="1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1"/>\n'
+                             + ext + '    </part>\n')
+            next_id += 1
+            obj_id = next_id
+            files[obj_path[1:]] = _object_file(meshes)
             rels.append(f' <Relationship Target="{obj_path}" Id="rel-{k}" Type="{MODEL_REL}"/>\n')
             root_objects.append(
                 f'  <object id="{obj_id}" p:UUID="{_uuid("object", k, name)}" type="model">\n   <components>\n'
-                f'    <component p:path="{obj_path}" objectid="{mesh_id}" p:UUID="{_uuid("component", k, name)}" '
-                f'transform="{IDENTITY}"/>\n   </components>\n  </object>\n')
+                + "".join(components) + '   </components>\n  </object>\n')
             tx, ty = c[0] + ox, c[1] + oy
             build_items.append(f'  <item objectid="{obj_id}" p:UUID="{_uuid("item", k, name)}" '
                                f'transform="1 0 0 0 1 0 0 0 1 {tx:.6f} {ty:.6f} 0" printable="1"/>\n')
             config_objects.append(
                 f'  <object id="{obj_id}">\n'
                 f'    <metadata key="name" value="{_esc(name)}"/>\n'
-                f'    <metadata key="extruder" value="1"/>\n'
-                f'    <part id="{mesh_id}" subtype="normal_part">\n'
-                f'      <metadata key="name" value="{_esc(name)}"/>\n'
-                f'      <metadata key="matrix" value="1 0 0 0 0 1 0 0 0 0 1 0 0 0 0 1"/>\n'
-                f'    </part>\n  </object>\n')
+                f'    <metadata key="extruder" value="{int(volumes[0][1])}"/>\n'
+                + "".join(parts) + '  </object>\n')
             instances.append(f'    <model_instance>\n      <metadata key="object_id" value="{obj_id}"/>\n'
                              f'      <metadata key="instance_id" value="0"/>\n'
                              f'      <metadata key="identify_id" value="{100 + k}"/>\n    </model_instance>\n')
@@ -241,16 +303,17 @@ def write_project(path: str | Path, plates: list[list[tuple[str, object]]], proj
     files["Metadata/model_settings.config"] = (
         '<?xml version="1.0" encoding="UTF-8"?>\n<config>\n' + "".join(config_objects) + "".join(config_plates)
         + "</config>\n")
+    filaments = project.get("filaments") or [{"preset": project["filament_preset"], "color": FILAMENT_COLOUR}]
     files["Metadata/project_settings.config"] = json.dumps({
         "name": "project_settings", "from": "project",
         "printer_model": project["printer_model"],
         "printer_settings_id": project["printer_preset"],
         "print_settings_id": project["print_preset"],
-        "filament_settings_id": [project["filament_preset"]],
-        "filament_colour": [FILAMENT_COLOUR],
-        # one entry each for the process, the filament and the printer: nothing differs from the system presets
-        "inherits_group": ["", "", ""],
-        "different_settings_to_system": ["", "", ""],
+        "filament_settings_id": [f["preset"] for f in filaments],
+        "filament_colour": [f["color"] for f in filaments],
+        # one entry each for the process, every filament and the printer: nothing differs from the system presets
+        "inherits_group": [""] * (len(filaments) + 2),
+        "different_settings_to_system": [""] * (len(filaments) + 2),
     }, indent=4) + "\n"
 
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:

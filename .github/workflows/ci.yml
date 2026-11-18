@@ -147,6 +147,7 @@ jobs:
           "${{ steps.setup.outputs.python }}" .github/scripts/check_viewer.py
           "$WORK/phone-stand/viewer.ja.html" ja
           "$WORK/phone-stand/viewer.html" en
+          "$WORK/multicolor/viewer.html" en
       - name: Upload the sample outputs
         if: always() && matrix.python == '3.13'
         uses: actions/upload-artifact@v4
@@ -157,6 +158,8 @@ jobs:
             ${{ env.WORK }}/phone-stand/*.png
             ${{ env.WORK }}/phone-stand/*.json
             ${{ env.WORK }}/phone-stand/out/final/
+            ${{ env.WORK }}/multicolor/*.html
+            ${{ env.WORK }}/multicolor/*.png
           if-no-files-found: ignore
           retention-days: 14
 

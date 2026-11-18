@@ -94,6 +94,20 @@
   #titleBlock dd { margin: 1px 0 0; font-size: 13px; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
   #titleBlock dd small { font-weight: 400; color: var(--muted); font-size: 11px; }
 
+  /* filament legend (multi-color models, filament colors view): one row per filament, above the title block */
+  #legend { display: none; max-width: min(380px, 100%); padding: 6px 10px 7px;
+    background: color-mix(in srgb, var(--surface) 92%, transparent); backdrop-filter: blur(6px);
+    border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); font-size: 12px; }
+  #legend.on { display: block; }
+  #legend h2 { font-size: 11px; font-weight: 600; color: var(--muted); margin: 0 0 3px; }
+  #legend ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 1px; }
+  #legend li { display: flex; align-items: center; gap: 7px; padding: 2px 4px; border-radius: 5px; cursor: default; }
+  #legend li:hover { background: var(--signal-soft); }
+  #legend .no { font-weight: 700; font-size: 11px; color: var(--muted); min-width: 10px; font-variant-numeric: tabular-nums; }
+  #legend .sw { width: 12px; height: 12px; border-radius: 50%; flex: none; box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .2); }
+  #legend .mat { color: var(--muted); }
+  #legend .mat.unset { font-style: italic; }
+
   /* mouse hint: shown at first, folds into a "?" after the first drag or when the panel opens; hover or focus opens it again */
   #hint { display: flex; align-items: flex-start; max-width: min(380px, 100%);
     background: color-mix(in srgb, var(--surface) 90%, transparent); border: 1px solid var(--line); border-radius: 14px;
@@ -132,6 +146,8 @@
     border-radius: var(--radius); padding: 8px 11px 9px; font-size: 12px; box-shadow: var(--shadow); display: none; max-width: 280px; }
   #tip .t { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; }
   #tip .t i { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+  #tip .fsw { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; vertical-align: -1px;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .2); }
   #tip .t small { color: var(--muted); font-weight: 600; font-variant-numeric: tabular-nums; }
   #tip p { margin: 3px 0 0; color: var(--ink-soft); }
   #tip .m { margin-top: 4px; color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -218,6 +234,8 @@
     #corner { left: 10px; bottom: 10px; right: 100px; }
     #hint { display: none; }
     #titleBlock { min-width: 0; max-width: 100%; }
+    #legend { padding: 4px 8px 5px; font-size: 11.5px; }
+    #legend h2 { display: none; }
     #titleBlock h1 { font-size: 13px; padding: 5px 9px 4px; }
     #titleBlock dl { grid-template-columns: auto auto; }
     #titleBlock dl > div { padding: 3px 9px 4px; }
@@ -244,6 +262,7 @@
     </button>
     <div id="corner">
     <div id="hint"><button class="q" data-i18n-title="hintTitle" data-i18n-aria-label="hintTitle">?</button><ul id="hintList"></ul></div>
+    <section id="legend" aria-labelledby="legendTitle"><h2 id="legendTitle" data-i18n="filaments"></h2><ul id="legendList"></ul></section>
     <section id="titleBlock" aria-labelledby="title">
       <h1 id="title"></h1>
       <dl>
@@ -314,6 +333,9 @@ window.P3D_I18N = {
     tgContact: "Faces touching the bed",
     tgCoin: "Size reference", tgCoinNote: "Ø20 mm coin",
     modeDesign: "As used", modePrint: "Print orientation",
+    colorGroup: "Colors", colorParts: "Part colors", colorFilament: "Filament colors",
+    filaments: "Filaments", matUnset: "material not decided",
+    filamentOf: (no, label) => `Filament ${no}: ${label}`,
     views: ["Front", "Back", "Right", "Left", "Top", "Bottom", "Overview"],
     dirs: { up: "Up", down: "Down", front: "Front", back: "Back", right: "Right", left: "Left" },
     gizmo: { up: "U", down: "D", front: "F", back: "B", right: "R", left: "L" },
@@ -342,6 +364,9 @@ window.P3D_I18N = {
     tgContact: "ベッドに接する面",
     tgCoin: "大きさの目安", tgCoinNote: "1円玉（直径20mm）",
     modeDesign: "使うときの向き", modePrint: "印刷の向き",
+    colorGroup: "色分け", colorParts: "パーツ色", colorFilament: "フィラメント色",
+    filaments: "フィラメント", matUnset: "素材未定",
+    filamentOf: (no, label) => `フィラメント ${no}：${label}`,
     views: ["前から", "後ろから", "右から", "左から", "上から", "下から", "全体"],
     dirs: { up: "上", down: "下", front: "前", back: "後", right: "右", left: "左" },
     gizmo: { up: "上", down: "下", front: "前", back: "後", right: "右", left: "左" },
@@ -457,6 +482,13 @@ for (const [g, info] of Object.entries(M.groups)) {
 const IDENTITY = new THREE.Matrix4();
 // Matrix that places a group in the current view mode (print orientation, or as designed)
 const poseMatrix = (group) => (mode === "print" ? groupMatrix[group] : IDENTITY);
+// Multi-color models (two or more filaments): parts can be shown in their filament's color instead of the part color.
+// Filament n is the n-th entry of M.filaments, the same numbering as in the slicer.
+const FILS = M.filaments || [];
+const MULTI = FILS.length >= 2;
+const filOf = Object.fromEntries(FILS.map((f, i) => [f.id, { ...f, no: i + 1 }]));
+let colorMode = "parts";
+const partColor = (p) => (colorMode === "filament" && filOf[p.filament] ? filOf[p.filament].color : p.color);
 const modelRoot = new THREE.Group(); scene.add(modelRoot);
 const meshes = [];
 const designBox = new THREE.Box3();
@@ -680,17 +712,23 @@ function btnGroup(label) {
   g.setAttribute("role", "group"); g.setAttribute("aria-label", label);
   return g;
 }
-const modeBar = btnGroup(L.modeGroup), viewBar = btnGroup(L.viewGroup);
+const modeBar = btnGroup(L.modeGroup);
+const colorBar = MULTI ? btnGroup(L.colorGroup) : null;
+const viewBar = btnGroup(L.viewGroup);
 // Icons stand in for the text on phones (the text stays for screen readers)
 const svg = (d) => `<svg class="ic" viewBox="0 0 20 20" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="${d}"/></svg>`;
 const ICON = {
   design: svg("M3 17h14M5.5 17V9L10 5l4.5 4v8M8.5 17v-4h3v4"),                       // object standing where it is used
   print: svg("M6 2.5h8v3.5H6zM8.5 6h3L10 8.5zM5.5 12.5h9M3 16.5h14"),                 // print head above a layer on the bed
   fit: svg("M3 7V3h4M13 3h4v4M17 13v4h-4M7 17H3v-4M10 6.5l3.5 2v3.8L10 14.3l-3.5-2V8.5zM6.5 8.5 10 10.5l3.5-2M10 10.5v3.8"),
+  parts: svg("M3.5 3.5h5.5v5.5H3.5zM11 3.5h5.5v5.5H11zM3.5 11h5.5v5.5H3.5zM11 11h5.5v5.5H11z"),   // separate pieces
+  filament: svg("M3 10a6 6 0 1 0 12 0a6 6 0 1 0-12 0M7 10a2 2 0 1 0 4 0a2 2 0 1 0-4 0M15 13.5h3"),  // spool with a strand
 };
 const iconButton = (name, icon, onclick) => el("button", { onclick, innerHTML: `${icon || ""}<span class="lb">${esc(name)}</span>` });
 for (const [name, m] of [[L.modeDesign, "design"], [L.modePrint, "print"]])
   modeBar.appendChild(iconButton(name, ICON[m], () => setMode(m))).dataset.mode = m;
+if (colorBar) for (const [name, c] of [[L.colorParts, "parts"], [L.colorFilament, "filament"]])
+  colorBar.appendChild(iconButton(name, ICON[c], () => setColorMode(c))).dataset.color = c;
 VIEWS.forEach(([name, v], i) => {
   const last = i === VIEWS.length - 1;
   viewBar.appendChild(iconButton(name, last ? ICON.fit : "", () => viewFrom(v))).className = last ? "view-fit" : "view-dir";
@@ -843,8 +881,10 @@ const objLabel = Object.fromEntries(objects.map((o) => [o.id, o.label]));
 const tip = $("tip");
 function showTip(e, i) {
   const p = M.parts[i];
-  tip.innerHTML = `<div class="t"><i style="background:${esc(p.color)}"></i><small>${pid(i)}</small>${esc(p.label)}</div>`
+  tip.innerHTML = `<div class="t"><i style="background:${esc(partColor(p))}"></i><small>${pid(i)}</small>${esc(p.label)}</div>`
     + (nested ? `<div class="m">${esc(objLabel[p.group] ?? p.group)}</div>` : "")
+    + (MULTI && filOf[p.filament] ? `<div class="m"><i class="fsw" style="background:${esc(filOf[p.filament].color)}"></i>`
+      + `${esc(L.filamentOf(filOf[p.filament].no, filLine(filOf[p.filament])))}</div>` : "")
     + (p.description ? `<p>${esc(p.description)}</p>` : "")
     + `<div class="m">${esc([fmtDims(p.key_dims), L.bbox(p.size_mm)].filter(Boolean).join(" / "))}</div>`;
   const r = host.getBoundingClientRect();
@@ -928,6 +968,35 @@ renderer.domElement.addEventListener("dblclick", (e) => {          // make that 
   const delta = hit.point.clone().sub(controls.target);
   controls.target.add(delta); camera.position.add(delta); controls.update();
 });
+
+// ---------------------------------------------------------------- colors: part colors / filament colors (multi-color models)
+const filLine = (f) => `${f.label} · ${f.material || L.matUnset}`;
+if (MULTI) {
+  $("legendList").innerHTML = FILS.map((f, i) => `<li data-fil="${esc(f.id)}"><span class="no">${i + 1}</span>`
+    + `<i class="sw" style="background:${esc(f.color)}"></i><span>${esc(f.label)}</span>`
+    + `<span class="mat${f.material ? "" : " unset"}">${esc(f.material || L.matUnset)}</span></li>`).join("");
+  document.querySelectorAll("#legendList li").forEach((li) => {
+    const idx = M.parts.map((p, i) => [p, i]).filter(([p]) => p.filament === li.dataset.fil).map(([, i]) => i);
+    li.onmouseenter = () => setHover(idx); li.onmouseleave = () => setHover(null);
+  });
+}
+// In filament colors, a part added later is drawn in front where faces of two parts coincide, because the later
+// part's filament prints the shared volume (see p3d.filament).
+function setColorMode(c) {
+  colorMode = c;
+  meshes.forEach((m, i) => {
+    m.userData.mat.color.set(partColor(m.userData.part));
+    m.userData.mat.polygonOffsetUnits = c === "filament" ? 1 - 2 * i : 1;
+  });
+  labelObjs.forEach((l) => {
+    const col = partColor(l.part);
+    l.el.style.borderLeftColor = col; l.line.material.color.set(col); l.dot.material.color.set(col);
+  });
+  partRows.forEach((pr, i) => { if (pr) pr.r.querySelector(".sw").style.background = partColor(M.parts[i]); });
+  $("legend").classList.toggle("on", c === "filament");
+  setPressed("color", c);
+}
+if (MULTI) setColorMode("parts");
 
 // ---------------------------------------------------------------- render loop
 function resize() {

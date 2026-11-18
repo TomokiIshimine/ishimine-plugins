@@ -38,6 +38,17 @@ Rules that let the main agent, the reviewers, the viewer and the user speak the 
 - Parts in the same `print_group` are fused into one piece for printing. Use separate groups for pieces printed separately and assembled.
 - One `print_group` = one object. The viewer's part list nests object > part; name objects with `set_object_label(group, label)` (defaults to the group name).
 
+## Filaments (multi-color)
+
+Only when the user wants more than one color. A model without filaments (or with one) prints exactly as before.
+
+- Define each filament by **color and material**, never by AMS slot: `m.add_filament("body", color="#F2F2F2", material="PLA", label="Body (white)")`. The slicer maps them to whatever is loaded in the AMS when the job is sent (Bambu Studio matches type and nearest color), so the user's AMS contents do not matter.
+- `material` may be left out (None) when the user has not decided: checks and the 3MF then assume the printer's material (PLA unless printer.json says otherwise), and the user decides later in the slicer or at export (`p3d.export DIR --material body=PETG`). Materials: PLA, PLA Matte, PLA Silk, PETG, ABS, ASA, TPU.
+- Give each part its filament with `add_part(..., filament="body")`; a part without one uses the first filament. Filament 1, 2… in the slicer follow the order of `add_filament` (counting only filaments some part uses).
+- A model is **multi-color** when its parts use two or more filaments. Parts of one `print_group` stay one printed piece; in the 3MF the piece becomes one object with one part per filament.
+- Where parts of different filaments overlap, **the part added later wins**: its filament prints the shared volume. So add the body first and the colored details (letters, stripes, inlays) after it, overlapping or sunk into it.
+- Part colors (`color`) stay as they are for telling parts apart; the viewer has a "part colors / filament colors" switch for multi-color models.
+
 ## Language
 
 - Talk to the user in the language they use. The title, labels, descriptions, `key_dims` names and object labels in model.py, and the user-facing files (spec.md, design.md, print-notes.md), use that language too.
@@ -64,8 +75,10 @@ print3d/
         ├── model.glb, model.stl, model.step   design pose (GLB has one node per part, Z-up, extras.label)
         ├── parts/<id>.stl                      per part (design pose)
         ├── print/<group>.stl                   print pose (fused per group, laid out on the printer's plates)
+        ├── print/<group>.<filament>.stl        multi-color only: that piece's volume printed with one filament
         ├── parts.prev.json                     previous part definitions (requirements-reviewer uses it to spot unintended changes)
         └── final/<model>.3mf, <model>_<group>.stl  final output (export; Bambu Lab printers: one Bambu Studio project with every plate; others: <model>_plate<N>.3mf when it needs several plates)
+                                                    multi-color pieces also get <model>_<group>_<filament>.stl
 ```
 
 `parts.json` is generated from model.py, so never edit it by hand. To change part names or dimensions, fix model.py and run it again.
@@ -75,10 +88,10 @@ print3d/
 | Command (`cd RT && PY -m …`) | Purpose |
 |---|---|
 | `PYTHONPATH=RT PY model.py` (run in DIR) | Build the model → writes parts.json / out / analysis.json / viewer.html at once |
-| `p3d.analyze DIR [--stdout]` | Automatic printability checks (watertight, body count, build volume, wall thickness, overhangs, bridges, bed contact and center of mass, clearance, alternative orientations, layout on the plates) |
+| `p3d.analyze DIR [--stdout]` | Automatic printability checks (watertight, body count, build volume, wall thickness, overhangs, bridges, bed contact and center of mass, clearance, alternative orientations, layout on the plates, and filaments for multi-color models) |
 | `p3d.measure DIR [--part id / --section z=30 / --distance a b / --ray x,y,z dx,dy,dz]` | Measure dimensions |
 | `p3d.viewer DIR [--lang en\|ja]` | Rebuild only the viewer (does not rebuild the model) |
-| `p3d.export DIR` | Write the final STL/3MF and print facts for the print notes as JSON |
+| `p3d.export DIR [--material <filament>=<material> …]` | Write the final STL/3MF and print facts for the print notes as JSON (`--material` decides or changes a filament's material without rebuilding) |
 | `p3d.printer DIR` / `p3d.printer --presets` / `p3d.printer --find NAME` | Show the printer settings in use (and their `source`) / list presets / match a printer name to presets |
 | `p3d.printer --save DIR --preset KEY` (or `--name N --volume XxYxZ`) `[--nozzle --material --nozzle-mode --folder-only]` | Write DIR/printer.json and remember the user's printer (see the `printer` skill) |
 
@@ -89,7 +102,8 @@ model.py imports `p3d` from `PYTHONPATH`. A model.py made before version 0.5.3 h
 ```python
 m = LabeledModel("pen-stand", title="Pen stand", lang="en")
 m.add_part(id, label, shape, color=None, description="", key_dims=None,
-           requirements=None, anchor=None, print_group="main")
+           requirements=None, anchor=None, print_group="main", filament=None)
+m.add_filament(id, color="#RRGGBB", material=None, label=None)   # multi-color only (see "Filaments")
 m.add_feature(id, label, (x, y, z), description="", requirements=None)
 m.add_cut(shape, parts=None)            # subtract from every part (or only the listed parts)
 m.set_print_orientation(rotation_deg=(rx, ry, rz), bed_face="…", group=None)

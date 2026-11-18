@@ -32,6 +32,11 @@ Every number appears in `thresholds` in the `p3d.analyze` output; treat that as 
 | Layout on the plates | All pieces fit one plate together (`part_spacing_mm` apart); otherwise the number of plates (print runs) is reported | warning | `layout` |
 | Layout made for this printer | parts.json `print_layout.bed_mm` and `spacing_mm` equal the current `build_volume_mm` and `part_spacing_mm` (otherwise rerun model.py) | major | `layout` |
 | Piece turned diagonally to fit | Reported for the print notes | info | `layout` |
+| Filament count (multi-color) | No more filaments than the AMS feeds: 4 on the A1 / A1 mini (AMS lite), 16 on other Bambu Lab printers (four AMS units); more than 4 needs a second AMS unit | major (over the limit) / warning (more than 4) | `filaments` |
+| Every part's color prints (multi-color) | A part entirely covered by later parts of other filaments never prints in its color | warning | `filaments` |
+| Color regions are thick enough (multi-color) | Each color region at least 2 layers thick in the print direction, and color details (letters, lines) at least the nozzle size wide | warning | `filaments` |
+| One base material per piece (multi-color) | Different base materials (such as PLA and PETG) in one piece bond poorly | warning | `filaments` |
+| Filament changes (multi-color) | Rough count of filament changes per plate (layers holding two or more filaments) | info | `filaments` |
 
 **Verdict:** FAIL if there is even one critical or major finding. PASS if there are only warnings (warnings go into the print notes).
 
@@ -41,6 +46,7 @@ Every number appears in `thresholds` in the `p3d.analyze` output; treat that as 
 - Entries in `overhang_regions` with `flat: true` and `bridge_span_mm ≤ max_bridge_mm` are expected to print as bridges (they are listed in `bridges`). But **a cantilevered horizontal face (supported on one side only) is not a bridge**. Look at the shape; if it is cantilevered, treat it as an overhang.
 - Wall thickness is measured by casting rays inward from random surface points. Near sharp corners it can read thinner than it is. Check the `location` with `p3d.measure --ray` or `--section`; if it is a corner false positive you may exclude it (state why in the evidence).
 - Overhangs are judged on the fused shape, and faces with "another face within 0.3 mm directly below" or "the point just below the face inside another part" are already excluded as supported (for example the underside of a front lip sitting on the base).
+- `filaments` in analysis.json (multi-color models only) lists each filament with its pieces and volume, and per plate `multi_filament_layers` and `estimated_changes` (a rough count from the layers each color spans: every change costs time and purged filament, so colors kept to few layers print faster and waste less).
 - `layout` in analysis.json gives the plate count and, per piece, `plate`, `bed_turn_deg` and `bed_fit` (`fits`, `diagonal` or `too_big`).
 - Bed contact area is the total of downward flat faces at Z ≤ 0.2 mm. If the bottom floats even slightly (no face at Z=0), it is 0.
 - Things the measurements cannot catch (check by looking at the code and shape):

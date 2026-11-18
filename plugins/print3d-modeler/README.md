@@ -19,6 +19,7 @@ Built for Cowork in the Claude app (desktop and phone). It also works in Claude 
 - **Gets a second opinion.** Two read-only subagents review the model in parallel: one checks whether it will print, the other whether it meets your requirements. Claude fixes what they find, up to 3 rounds, before showing you anything.
 - **Lets you see it in 3D.** A single-file HTML viewer shows the model with part names and directions, so you can say "make the roof 5 mm higher" or "move the chimney to the left".
 - **Exports print-ready files.** 3MF / STL in print orientation, plus print notes with recommended settings and whether supports are needed.
+- **Prints in several colors when you want it.** Say which parts get which color (for example "white body, black letters") and the 3MF opens with the colors already assigned. One-color models work exactly as before. See [Multi-color printing](#multi-color-printing).
 
 ## Install
 
@@ -89,6 +90,8 @@ Also: the viewer is one self-contained HTML file (`viewer.html` in the model's f
 - Highlight **faces likely to need support** (red) and **faces touching the bed** (blue), judged in print orientation.
 - Show a Ø20 mm coin for scale.
 
+For multi-color models, a **part colors / filament colors** switch appears in the toolbar: filament colors show each part in the color it will print in, with a legend of the filaments.
+
 In the house below, the eaves, the door canopy and the window frames are shaped with sloped undersides, so no face is flagged as needing support and it prints as is.
 
 ![Print orientation with the support check on: the eaves, door canopy and window frames have sloped undersides, so nothing is flagged red](docs/images/en/viewer-print.png)
@@ -116,6 +119,16 @@ The viewer UI is available in English and Japanese.
 - The build volume defaults to 220×220×250 mm. Presets cover the main Bambu Lab printers (A1 mini, A1, P1P, P1S, P2S, X1 Carbon, X1E, X2D, H2S, H2D, H2D Pro, H2C, H3C; volumes from Bambu Lab's spec pages) and other popular printers (Prusa MK4 / CORE One / MINI+, Creality Ender-3 V3 / K1, and others). Any value can be overridden.
 - Tell Claude your printer once: it is saved in `print3d/printer.json` and remembered for your next models (in the plugin's data folder, and in Claude's memory where the app has one).
 - Pieces are laid out on your printer's bed for printing: each keeps the face that goes down and is turned about Z at any angle (5° steps), and their real outlines are packed (the whole piece seen from above, not just the face on the bed, so parts that overhang never run into each other), so L shapes nest into each other and small pieces fill the gaps, onto as few plates as possible. If they need more than one plate, Claude tells you; with a Bambu Lab printer the 3MF is a Bambu Studio project that holds every plate (open it in Bambu Studio or OrcaSlicer and each piece is on its plate, with your printer selected), and with other printers you get one 3MF per plate; if a piece does not fit your printer at all, Claude warns you and suggests splitting or scaling it.
+
+## Multi-color printing
+
+For printers with an AMS (or another multi-material unit). Only when you ask for colors: one-color models are made and exported exactly as before.
+
+- **Colors by color and material, not AMS slot.** You say "white PLA for the body, black for the letters"; nothing depends on what is loaded in your AMS today. When you send the job, Bambu Studio maps each filament to a loaded one by type and color, and you can change the mapping on that screen.
+- **Material can wait.** Leave it undecided and choose it in the slicer, or tell Claude at export ("make the black PETG") and only the 3MF is written again.
+- **Opens with the colors assigned.** Each printed piece is one object made of one part per color. With a Bambu Lab printer the 3MF is a Bambu Studio project with the filaments' colors and presets set; with other printers the 3MF carries the colors as 3MF base materials, and an STL per color is written too.
+- **Checked like the rest.** More colors than the AMS holds (4 on the A1 / A1 mini AMS lite), a color hidden inside another part, letters too thin or too shallow to show their color, and mixed materials in one piece are flagged; the print notes list each filament with its weight and a rough count of filament changes.
+- Where two colored parts overlap, the one added later wins, so letters or inlays sunk into a body print in their own color.
 
 ## Conventions
 

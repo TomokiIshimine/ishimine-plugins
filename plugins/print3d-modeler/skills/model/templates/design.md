@@ -7,6 +7,11 @@
 |---|---|---|---|---|---|
 | P1 | base | Base | 80×90×6 | main | R1 |
 
+## Filaments (multi-color models only)
+| No. | id | Color | Material | Parts |
+|---|---|---|---|---|
+| 1 | body | #F2F2F2 white | PLA | base |
+
 ## Location labels (holes, grooves, etc.)
 | id | Name | Position | Requirements |
 |---|---|---|---|

@@ -40,6 +40,7 @@ These instructions are in English, but **answer in the user's language**: the la
 | Printer, build volume, nozzle, material, presets | `${CLAUDE_PLUGIN_ROOT}/skills/printer/SKILL.md` |
 | Directions, coordinates, part names, the working folder and its files | `${CLAUDE_PLUGIN_ROOT}/skills/modeling-conventions/SKILL.md` |
 | What counts as printable, thresholds | `${CLAUDE_PLUGIN_ROOT}/skills/printability-rules/SKILL.md` |
+| Multi-color printing (AMS), filament colors and materials | "Filaments" in `${CLAUDE_PLUGIN_ROOT}/skills/modeling-conventions/SKILL.md`, and `${CLAUDE_PLUGIN_ROOT}/skills/export/SKILL.md` |
 
 If the topic is not about this plugin, say so in one line and answer the question normally.
 

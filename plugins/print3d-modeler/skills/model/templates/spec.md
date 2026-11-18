@@ -8,6 +8,7 @@
 ## Print environment
 - Printer: <model name> (build volume X×Y×Z mm) <say so if provisional>
 - Nozzle: 0.4 mm / Material: PLA
+- Colors: one color / multi-color (<filaments: color and material, "not decided" allowed>)
 - Process: FDM
 
 ## Requirements
