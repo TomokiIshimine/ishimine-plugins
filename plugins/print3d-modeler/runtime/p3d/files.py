@@ -6,6 +6,7 @@
       viewer.html           3D viewer (written by p3d.viewer)
       out/parts/<id>.stl    mesh per part, design pose
       out/print/<group>.stl one piece per print_group, print pose
+      out/print/<group>.<filament>.stl  multi-color models: that piece's volume printed with one filament
       out/final/            print files (written by p3d.export)
 """
 from __future__ import annotations
@@ -35,6 +36,10 @@ def part_stl(d: Path, part_id: str) -> Path:
 
 def print_stl(d: Path, group: str) -> Path:
     return Path(d) / "out" / "print" / f"{group}.stl"
+
+
+def print_filament_stl(d: Path, group: str, filament: str) -> Path:
+    return Path(d) / "out" / "print" / f"{group}.{filament}.stl"
 
 
 def load_mesh(path: Path) -> trimesh.Trimesh:

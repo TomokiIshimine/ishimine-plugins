@@ -6,6 +6,15 @@
 - 3MF: `out/final/<model>.3mf` (load it straight into your slicer; orientation is already set. With a Bambu Lab printer it is a Bambu Studio project holding every plate)
 - STL: `out/final/<model>_<group>.stl`
 
+## Filaments (multi-color models only; delete this section otherwise)
+| No. | Color | Filament | Material | Weight upper bound |
+|---|---|---|---|---|
+| 1 | #F2F2F2 | Body (white) | PLA | … g |
+| 2 | #1A1A1A | Letters (black) | not decided (choose in the slicer) | … g |
+
+- The numbers are the filaments in the 3MF, not AMS slots: the slicer maps them to the loaded filaments when you send the job.
+- Filament changes: about … (each change takes time and purges some filament)
+
 ## Print orientation
 - <per piece: which face goes down>
 

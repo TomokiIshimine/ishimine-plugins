@@ -5,7 +5,8 @@
 
 Inputs: parts.json, out/parts/<id>.stl (design pose), printer.json (optional)
 Checks: watertightness, body count, build volume, minimum wall thickness, overhangs, bridges,
-        bed contact area and center of mass, clearance between pieces, alternative print orientations
+        bed contact area and center of mass, clearance between pieces, alternative print orientations,
+        and for multi-color models the filaments (count, hidden parts, thin color details, color changes)
 Every position is reported in design-pose coordinates (the coordinates the user sees).
 """
 from __future__ import annotations
@@ -21,7 +22,9 @@ from pathlib import Path
 import numpy as np
 import trimesh
 
-from .files import ANALYSIS_JSON, load_dir, write_json
+from .bambu import max_filaments
+from .filament import normalize_material, used_filaments
+from .files import ANALYSIS_JSON, load_dir, load_mesh, print_filament_stl, print_stl, write_json
 from .layout import DIAGONAL, fits_bed, is_current
 from .meshutil import boolean, direction_label, fuse, np_default, place_on_bed, round_list, transformed
 from .printer import load_printer
@@ -459,6 +462,98 @@ def _check_layout(pj: dict, lim: Limits, f: Findings) -> dict:
                        for g, gi in groups.items()}}
 
 
+# --------------------------------------------------------------------- filaments (multi-color)
+def _check_filaments(d: Path, pj: dict, poses: list[GroupPose], lim: Limits, f: Findings) -> dict | None:
+    """Multi-color models: filament count against the AMS, parts hidden by later parts, color details too small to
+    show, and roughly how many filament changes the print needs. None for models with fewer than two filaments."""
+    fl = used_filaments(pj)
+    if len(fl) < 2:
+        return None
+    names = {x["id"]: x["label"] for x in fl}
+    try:
+        assumed = normalize_material(lim.printer.get("material")) or "PLA"
+    except ValueError:
+        assumed = "PLA"
+    mat_of = {x["id"]: x.get("material") or assumed for x in fl}   # undecided materials: the printer's material
+    part_fil = {p["id"]: p["filament"] for p in pj["parts"]}
+    mx = max_filaments(lim.printer)
+    pname = lim.printer["name"]
+    if mx is not None and len(fl) > mx:
+        f.add("major", f"The model uses {len(fl)} filaments, but the AMS of {pname} feeds at most {mx}", check="filaments",
+              evidence=f"filaments={[x['id'] for x in fl]}",
+              suggestion=f"Use {mx} colors or fewer (merge colors), or split the colors over separate print runs")
+    elif mx is not None and len(fl) > 4:
+        f.add("warning", f"The model uses {len(fl)} filaments: one AMS holds 4, so {pname} needs more than one AMS unit",
+              check="filaments", evidence=f"filaments={[x['id'] for x in fl]}",
+              suggestion="Confirm with the user how many AMS units they have")
+    elif mx is None:
+        f.add("info", f"The model uses {len(fl)} filaments: {pname} must be able to print several filaments "
+              "(an AMS or another multi-material unit)", check="filaments")
+    layer = float(lim.printer.get("layer_height_mm", 0.2))
+    volume = {x["id"]: 0.0 for x in fl}
+    pieces: dict[str, list] = {x["id"]: [] for x in fl}
+    plate_layers: dict[int, dict[int, set]] = {}
+    for gp in poses:
+        g, gi = gp.name, gp.info
+        regions = gi.get("filaments") or []
+        hidden = gi.get("hidden_parts")
+        for pid in gp.part_ids:
+            if (pid in hidden) if hidden is not None else (part_fil[pid] not in regions):
+                f.add("warning", f"[{g}] Part {pid} is completely covered by later parts of other filaments, so its "
+                      f"filament ({names.get(part_fil[pid], part_fil[pid])}) does not print at all", part=pid,
+                      check="filaments", evidence=f"filaments printed in {g}: {regions}",
+                      suggestion="Move the part, change the order the parts are added (later parts win), or remove it")
+        mats = {mat_of[fid].split()[0] for fid in regions}
+        if len(mats) > 1:
+            f.add("warning", f"[{g}] One piece mixes {' and '.join(sorted(mats))}, which bond poorly to each other, "
+                  "so the colors may separate", check="filaments",
+                  evidence=", ".join(f"{fid}: {mat_of[fid]}" for fid in regions),
+                  suggestion="Use one base material within a piece (for example PLA and PLA Matte), "
+                             "or confirm with the user")
+        layers = plate_layers.setdefault(int(gi.get("plate", 1)), {})
+        for fid in regions:
+            rm = load_mesh(print_stl(d, g) if len(regions) == 1 else print_filament_stl(d, g, fid))
+            pieces[fid].append(g)
+            volume[fid] += float(rm.volume) if rm.is_watertight else 0.0
+            for body in rm.split(only_watertight=False) or [rm]:
+                lo, hi = body.bounds
+                for k in range(int(lo[2] // layer), max(int(math.ceil(hi[2] / layer - 1e-6)), int(lo[2] // layer) + 1)):
+                    layers.setdefault(k, set()).add(fid)
+                if len(regions) > 1 and hi[2] - lo[2] < 2 * layer - 1e-6:
+                    c = gp.to_design((lo + hi) / 2)
+                    f.add("warning", f"[{g}] A {names[fid]} color region is only {hi[2] - lo[2]:.2f} mm thick in the print "
+                          f"direction (under 2 layers of {layer:g} mm), so its color may look patchy", check="filaments",
+                          part=gp.nearest_part(c), location=c, evidence=f"filament={fid}, height={hi[2] - lo[2]:.3f}mm",
+                          suggestion=f"Make the color region at least {2 * layer:g} mm (2 layers) thick, ideally 3 layers")
+            if len(regions) > 1:
+                th, pts = wall_thickness(rm, n=2000)
+                thin = th < lim.nozzle
+                if thin.sum() >= 3:
+                    k = int(np.argmin(np.where(thin, th, np.inf)))
+                    c = gp.to_design(pts[k])
+                    f.add("warning", f"[{g}] Part of the {names[fid]} color is thinner than the {lim.nozzle:g} mm nozzle "
+                          f"(minimum {th[k]:.2f} mm), so that detail may not show in its color", check="filaments",
+                          part=gp.nearest_part(c), location=c,
+                          evidence=f"{int(thin.sum())} thickness samples of filament {fid} below {lim.nozzle:g}mm",
+                          suggestion=f"Make color details (lines, letters) at least {lim.nozzle:g} mm wide, "
+                                     f"ideally {2 * lim.nozzle:g} mm")
+    plates = []
+    for plate, layers in sorted(plate_layers.items()):
+        multi = [len(v) for v in layers.values() if len(v) > 1]
+        plates.append({"plate": plate, "multi_filament_layers": len(multi), "estimated_changes": sum(n - 1 for n in multi)})
+    changes = sum(p["estimated_changes"] for p in plates)
+    if changes:
+        per_plate = ", ".join("plate %d: %d" % (p["plate"], p["estimated_changes"]) for p in plates)
+        f.add("info", f"Roughly {changes} filament changes ({per_plate}): "
+              "each change takes time and purges filament", check="filaments",
+              evidence=f"layers with two or more filaments at {layer:g} mm layers: "
+                       f"{sum(p['multi_filament_layers'] for p in plates)}",
+              suggestion="Keeping each color within fewer layers (such as letters only on the top) cuts the changes")
+    return {"count": len(fl), "max_filaments": mx,
+            "filaments": [{**x, "pieces": pieces[x["id"]], "volume_mm3": round(volume[x["id"]], 1)} for x in fl],
+            "plates": plates, "estimated_changes": changes}
+
+
 # --------------------------------------------------------------------- main analysis
 def analyze_dir(d: str | Path, write: bool = True) -> dict:
     d = Path(d)
@@ -471,6 +566,7 @@ def analyze_dir(d: str | Path, write: bool = True) -> dict:
     groups_out = [_analyze_group(gp, lim, findings) for gp in poses]
     clearances = _check_clearances(poses, part_meshes, lim, findings) if len(poses) > 1 else []
     layout = _check_layout(pj, lim, findings)
+    filaments = _check_filaments(d, pj, poses, lim, findings)
 
     findings.sort(key=lambda x: SEVERITY_RANK[x["severity"]])
     allb = trimesh.util.concatenate(list(part_meshes.values())).bounds
@@ -485,6 +581,7 @@ def analyze_dir(d: str | Path, write: bool = True) -> dict:
         "groups": groups_out,
         "clearances": clearances,
         "layout": layout,
+        **({"filaments": filaments} if filaments else {}),
         "findings": list(findings),
         "thresholds": lim.as_dict(),
     }

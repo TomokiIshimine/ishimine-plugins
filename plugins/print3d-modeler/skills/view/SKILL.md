@@ -26,4 +26,5 @@ Target: $ARGUMENTS (defaults to the most recently updated model)
    - Left drag to rotate, wheel to zoom (toward the cursor), right drag to pan, double-click to make that point the rotation center.
    - Hovering a part shows its name (such as "P1 Base"). Together with the directions (up/down, front/back, left/right), the user can give instructions in chat like "make P2 Backrest 10 mm taller". Clicking (or tapping) a part copies its name to the clipboard, ready to paste into chat.
    - The button at the top right opens the panel, where parts (per object if there are several) can be shown, hidden or made transparent, and part labels, directions, faces likely to need support and the size-reference coin can be toggled.
+   - Multi-color models have a "part colors / filament colors" switch in the toolbar: filament colors show each part in its filament's color, as it will print, with a legend of the filaments (number in the slicer, color, material or "not decided").
    - The print orientation button shows how the pieces are laid out on the printer's bed and its build volume (one bed per plate, labeled "Plate 1, 2…", when they need several).

@@ -190,5 +190,136 @@ print("Bambu Studio project ok")
 PY
 end
 
+step "multi-color model (filaments by color and material, later parts win, Bambu Studio project and plain 3MF)"
+C="${WORK}/multicolor"
+rm -rf "$C" && mkdir -p "$C"
+cat > "${C}/model.py" <<'PY'
+from build123d import Align, Box, Pos
+from p3d import LabeledModel
+
+BOT = (Align.CENTER, Align.CENTER, Align.MIN)
+m = LabeledModel("multicolor", title="Tag", lang="en")
+m.add_filament("body", color="#F2F2F2", material="PLA", label="Body (white)")
+m.add_filament("stripe", color="#1A1A1A", label="Stripe (black)")          # material not decided
+m.add_filament("unused", color="#00FF00", material="PLA", label="Unused")   # used by no part: not in the 3MF
+m.add_filament("dot", color="#D62828", material="PLA Matte", label="Dot (red)")
+m.add_part("plate", "Plate", Box(60, 30, 4, align=BOT), filament="body")
+# sunk 1 mm into the plate and standing 1 mm proud: the later part wins the shared volume
+m.add_part("stripe", "Stripe", Pos(0, 0, 3) * Box(40, 6, 2, align=BOT), filament="stripe")
+m.add_part("dot", "Dot", Pos(0, 50, 0) * Box(12, 12, 3, align=BOT), filament="dot", print_group="dot")
+m.set_print_orientation((0, 0, 0), bed_face="bottom")
+m.build(__file__)
+PY
+echo '{"preset": "bambu-a1"}' > "${C}/printer.json"
+(cd "$C" && PYTHONPATH="$RT" "$PY" model.py) > /dev/null
+"$PY" -m p3d.export "$C" --material dot=PETG > "${WORK}/export-multicolor.json"
+"$PY" - "$C" "${WORK}/export-multicolor.json" <<'PY'
+import json, re, sys, zipfile
+from pathlib import Path
+import trimesh
+
+d = Path(sys.argv[1])
+pj = json.loads((d / "parts.json").read_text(encoding="utf-8"))
+assert [f["id"] for f in pj["filaments"]] == ["body", "stripe", "dot"], pj["filaments"]
+assert pj["filaments"][1]["material"] is None and pj["filaments"][2]["material"] == "PLA Matte"
+groups = pj["print_orientation"]["groups"]
+assert groups["main"]["filaments"] == ["body", "stripe"] and groups["dot"]["filaments"] == ["dot"], groups
+assert groups["main"]["hidden_parts"] == [] and "hidden_parts" not in groups["dot"], groups
+whole = trimesh.load(d / "out/print/main.stl")
+body, stripe = (trimesh.load(d / f"out/print/main.{f}.stl") for f in ("body", "stripe"))
+assert abs(stripe.volume - 40 * 6 * 2) < 1 and abs(body.volume + stripe.volume - whole.volume) < 1, \
+    (body.volume, stripe.volume, whole.volume)
+assert not (d / "out/print/dot.dot.stl").exists()
+a = json.loads((d / "analysis.json").read_text(encoding="utf-8"))
+assert a["filaments"]["count"] == 3 and a["filaments"]["max_filaments"] == 4, a["filaments"]
+assert a["filaments"]["estimated_changes"] > 0, a["filaments"]
+
+r = json.load(open(sys.argv[2]))
+assert r["multicolor"] and [f["filament"] for f in r["filaments"]] == [1, 2, 3], r["filaments"]
+st, dot = r["filaments"][1], r["filaments"][2]
+assert not st["material_decided"] and st["material"] == "PLA", st
+assert dot["material"] == "PETG" and dot["material_decided"] and dot["slicer_preset"] == "Bambu PETG HF @BBL A1", dot
+assert any("--material stripe=" in w for w in r["layout"]["warnings"]), r["layout"]["warnings"]
+assert r["slicer_project"]["filament_presets"] == ["Bambu PLA Basic @BBL A1"] * 2 + ["Bambu PETG HF @BBL A1"]
+assert sorted(r["files"]["filament_stl"]) == ["out/final/multicolor_main_body.stl", "out/final/multicolor_main_stripe.stl"]
+
+z = zipfile.ZipFile(d / "out/final/multicolor.3mf")
+ps = json.loads(z.read("Metadata/project_settings.config"))
+assert ps["filament_colour"] == ["#F2F2F2", "#1A1A1A", "#D62828"], ps
+assert len(ps["filament_settings_id"]) == 3 and len(ps["inherits_group"]) == 5 == len(ps["different_settings_to_system"])
+cfg = z.read("Metadata/model_settings.config").decode()
+objs = re.findall(r'<object id="\d+">(.*?)</object>', cfg, re.S)
+assert len(objs) == 2, cfg
+parts = re.findall(r'<part id="(\d+)"(.*?)</part>', objs[0], re.S)
+assert [re.search(r'key="extruder" value="(\d)"', p).group(1) for _, p in parts] == ["1", "2"], objs[0]
+assert '<metadata key="extruder" value="3"/>' in objs[1] and objs[1].count("<part ") == 1, objs[1]
+root = z.read("3D/3dmodel.model").decode()
+assert root.count("<component ") == 3, root
+print("multi-color Bambu project ok")
+PY
+# the same model for a printer without a Bambu Studio project: a plain 3MF with the colors as base materials
+echo '{"preset": "prusa-mk4"}' > "${C}/printer.json"
+(cd "$C" && PYTHONPATH="$RT" "$PY" model.py) > /dev/null
+"$PY" -m p3d.export "$C" > /dev/null
+"$PY" - "${C}/out/final/multicolor.3mf" <<'PY'
+import sys, zipfile
+import trimesh
+m = zipfile.ZipFile(sys.argv[1]).read("3D/3dmodel.model").decode()
+assert m.count("<base ") == 3 and 'displaycolor="#1A1A1AFF"' in m and m.count('pid="1"') == 3, m[:800]
+s = trimesh.load(sys.argv[1])
+assert len(s.geometry) == 3, s.geometry
+print("multi-color plain 3MF ok")
+PY
+"$PY" -m p3d.viewer "$C" --lang en > /dev/null
+grep -q '"filaments": \[{"id": "body"' "${C}/viewer.html"
+"$PY" - <<'PY'
+import trimesh
+from p3d.filament import resolve_overlaps
+a = trimesh.creation.box((10, 10, 10))
+b = trimesh.creation.box((10, 10, 10)); b.apply_translation((5, 0, 0))
+r = resolve_overlaps([a, b], ["x", "y"])
+assert abs(r["x"].volume - 500) < 1e-6 and abs(r["y"].volume - 1000) < 1e-6, {k: v.volume for k, v in r.items()}
+r = resolve_overlaps([a, b, a.copy()], ["x", "y", "x"])    # a later part of the first filament wins back its volume
+assert abs(r["x"].volume - 1000) < 1e-6 and abs(r["y"].volume - 500) < 1e-6, {k: v.volume for k, v in r.items()}
+from p3d.filament import hidden_parts
+c = trimesh.creation.box((4, 4, 4)); c.apply_translation((20, 0, 0))
+# two parts of filament x, the second (c) entirely inside a later part of y: c is hidden although x still prints
+big = trimesh.creation.box((6, 6, 6)); big.apply_translation((20, 0, 0))
+assert hidden_parts([a, c, big], ["x", "x", "y"]) == [1]
+assert hidden_parts([a, b], ["x", "y"]) == [] and hidden_parts([c, big], ["x", "x"]) == []
+print("later parts win ok")
+PY
+# a covered part is reported even when another part of the same filament still prints
+H="${WORK}/hidden"
+rm -rf "$H" && mkdir -p "$H"
+cat > "${H}/model.py" <<'PY'
+from build123d import Align, Box, Pos
+from p3d import LabeledModel
+
+BOT = (Align.CENTER, Align.CENTER, Align.MIN)
+m = LabeledModel("hidden", title="Hidden", lang="en")
+m.add_filament("white", color="#F2F2F2", material="PLA")
+m.add_filament("black", color="#1A1A1A", material="PLA")
+m.add_part("plate", "Plate", Box(40, 20, 4, align=BOT), filament="white")
+m.add_part("mark", "Mark", Pos(10, 0, 1) * Box(4, 4, 2, align=BOT), filament="white")
+m.add_part("cover", "Cover", Pos(10, 0, 0) * Box(8, 8, 6, align=BOT), filament="black")
+m.set_print_orientation((0, 0, 0), bed_face="bottom")
+m.build(__file__)
+PY
+echo '{"preset": "bambu-a1"}' > "${H}/printer.json"
+(cd "$H" && PYTHONPATH="$RT" "$PY" model.py) > /dev/null
+"$PY" - "$H" <<'PY'
+import json, sys
+from pathlib import Path
+d = Path(sys.argv[1])
+g = json.loads((d / "parts.json").read_text(encoding="utf-8"))["print_orientation"]["groups"]["main"]
+assert g["filaments"] == ["white", "black"] and g["hidden_parts"] == ["mark"], g
+a = json.loads((d / "analysis.json").read_text(encoding="utf-8"))
+hits = [x for x in a["findings"] if x["check"] == "filaments" and "completely covered" in x["issue"]]
+assert [x["part"] for x in hits] == ["mark"], hits
+print("hidden part ok")
+PY
+end
+
 echo
 echo "print3d-modeler smoke test passed"

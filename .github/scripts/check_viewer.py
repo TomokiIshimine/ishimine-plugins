@@ -3,8 +3,9 @@
     python .github/scripts/check_viewer.py <viewer.html> <expected lang> [<viewer.html> <lang> ...]
 
 For each file: no page errors or console errors, the viewer reaches window.__ready, the UI language
-is the expected one, the title and every part from the embedded model are shown, and the
-"failed to start" message stays hidden. A screenshot is saved next to each file (<name>.png).
+is the expected one, the title and every part from the embedded model are shown, the
+"failed to start" message stays hidden, and multi-color models (and only they) have a working
+part colors / filament colors switch. A screenshot is saved next to each file (<name>.png).
 Set CHROMIUM_PATH to use an already installed Chromium instead of Playwright's own.
 """
 from __future__ import annotations
@@ -45,6 +46,20 @@ def check(page, html: Path, lang: str) -> list[str]:
     for label in state["parts"]:
         if label not in state["tree"]:
             problems.append(f"part {label!r} is missing from the parts list")
+    filaments = page.evaluate("(window.MODEL && window.MODEL.filaments || []).length")
+    switch = page.locator('[data-color="filament"]')
+    if filaments >= 2:
+        if switch.count() != 1:
+            problems.append("multi-color model without the part colors / filament colors switch")
+        else:
+            switch.click()
+            page.wait_for_timeout(200)
+            rows = page.evaluate("document.querySelectorAll('#legend.on li').length")
+            if rows != filaments:
+                problems.append(f"filament legend shows {rows} rows, the model has {filaments} filaments")
+            page.locator('[data-color="parts"]').click()
+    elif switch.count():
+        problems.append("one-color model shows the filament colors switch")
     if state["errShown"]:
         problems.append("the 'viewer failed to start' message is shown")
     if not state["canvas"]:

@@ -67,6 +67,7 @@ At the end of each step, record 1–3 lines in `history.md` (`resume` uses it to
 - Ask the user with AskUserQuestion, 1–3 topics at a time, with options. Rephrase technical terms (for example: "overhang (a part whose underside hangs in the air and needs support material underneath)").
 - When printability and the user's wishes conflict (for example, the wall they want is too thin), do not decide alone. Lay out alternatives and let the user choose.
 - Map the user's instructions to part labels (`label` in `parts.json`) and directions (up/down, front/back, left/right), add them to `spec.md` as requirements, then make the change. If an instruction is ambiguous, ask back with AskUserQuestion.
+- Multi-color printing only when the user wants it: do not ask about colors otherwise, so one-color models go exactly as before. Name filaments by color and material (never AMS slots); the material may stay undecided until export. See "Filaments" in `modeling-conventions`.
 - Directions always refer to the model as used. The print orientation is kept separately as a rotation in `set_print_orientation`.
 - When showing the viewer, if a tool for creating artifacts is available, show the contents of `viewer.html` as an artifact as is (it is a single self-contained file that loads nothing external). Always also give a link to the file (in Cowork use the `computer://<absolute path>` form; it works offline when opened in a browser).
 
@@ -92,7 +93,7 @@ Ask the `questions_for_user` from `requirements-reviewer` (requirements it could
 
 ## User check (step 6)
 
-1. Show the viewer (already built in step 4; if missing, run `cd RT && PY -m p3d.viewer <model_dir>`) and give the link. Add 2–3 lines on how to use it (drag to rotate, wheel to zoom, hover a part to see its name, click it to copy the name for chat, open the panel with the button at the top right to toggle what is shown, and use the direction labels to give instructions in chat). Use the button names as they appear in the viewer's language.
+1. Show the viewer (already built in step 4; if missing, run `cd RT && PY -m p3d.viewer <model_dir>`) and give the link. Add 2–3 lines on how to use it (drag to rotate, wheel to zoom, hover a part to see its name, click it to copy the name for chat, open the panel with the button at the top right to toggle what is shown, and use the direction labels to give instructions in chat; for multi-color models, the filament colors button shows the colors as printed). Use the button names as they appear in the viewer's language.
 2. If there are points to confirm (`questions_for_user` from the review, things you were unsure about in the design), ask them with AskUserQuestion in the same message as the viewer (include part labels and directions). Do not put questions in the viewer.
 3. Add the chat instructions and answers to `spec.md` as requirements and go back to step 2 or 3. If the user says OK, go to step 7.
 

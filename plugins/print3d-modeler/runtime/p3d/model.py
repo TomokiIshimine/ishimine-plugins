@@ -9,7 +9,8 @@ from pathlib import Path
 import numpy as np
 import trimesh
 
-from .files import PARTS_JSON, part_stl, print_stl, write_json
+from .filament import hidden_parts, normalize_color, normalize_material, resolve_overlaps
+from .files import PARTS_JSON, part_stl, print_filament_stl, print_stl, write_json
 from .layout import arrange, placement_matrix
 from .meshutil import boolean, fuse, is_build123d, place_on_bed, round_list, to_trimesh, transformed
 
@@ -30,6 +31,15 @@ class Part:
     requirements: list = field(default_factory=list)
     anchor: list | None = None
     print_group: str = "main"
+    filament: str | None = None
+
+
+@dataclass
+class Filament:
+    id: str
+    label: str
+    color: str
+    material: str | None = None
 
 
 @dataclass
@@ -62,6 +72,8 @@ class LabeledModel:
     - Build in the design pose (as used). The print orientation is kept as a rotation via set_print_orientation.
     - Parts in the same print_group are fused into one piece for printing. Use separate groups for separate pieces.
     - lang is the viewer's UI language ("en" or "ja"). None picks it from the labels (Japanese text -> "ja").
+    - Multi-color: define filaments by color and material with add_filament and give each part a filament.
+      Without filaments (or with one) every output is the same as for a one-color model.
     """
 
     def __init__(self, name: str, title: str | None = None, lang: str | None = None):
@@ -76,11 +88,13 @@ class LabeledModel:
         self.print_orientation: dict = {"rotation_deg": [0, 0, 0], "bed_face": "bottom face in the design pose (Z=0)"}
         self.group_orientation: dict[str, dict] = {}
         self.object_labels: dict[str, str] = {}
+        self.filaments: list[Filament] = []
         self.print_note = ""
 
     # ------------------------------------------------------------------ definition
     def add_part(self, id, label, shape, color=None, description="", key_dims=None,
-                 requirements=None, anchor=None, print_group="main"):
+                 requirements=None, anchor=None, print_group="main", filament=None):
+        """filament: id of a filament from add_filament (multi-color). Parts without one use the first filament."""
         if not ID_RE.match(id):
             raise ValueError(f"Part id must be a lowercase slug: {id!r}")
         if any(p.id == id for p in self.parts):
@@ -88,7 +102,23 @@ class LabeledModel:
         color = color or PALETTE[len(self.parts) % len(PALETTE)]
         self.parts.append(Part(id, label, shape, color, description, dict(key_dims or {}),
                                list(requirements or []), list(anchor) if anchor is not None else None,
-                               print_group))
+                               print_group, filament))
+        return self
+
+    def add_filament(self, id, color, material=None, label=None):
+        """A filament to print with, named by color and material, never by AMS slot.
+
+        color: "#RRGGBB" (the filament's color, shown in the viewer and written to the 3MF).
+        material: PLA, PLA Matte, PLA Silk, PETG, ABS, ASA or TPU. None = not decided yet: the printer's material is
+        assumed for checks and the 3MF, and the user picks it in the slicer or at export (p3d.export --material).
+        label: display name in the user's language (such as "Body (white)"). Filament 1, 2... in the slicer follow
+        the order of add_filament, counting only filaments some part uses.
+        """
+        if not ID_RE.match(id):
+            raise ValueError(f"Filament id must be a lowercase slug: {id!r}")
+        if any(f.id == id for f in self.filaments):
+            raise ValueError(f"Duplicate filament id: {id}")
+        self.filaments.append(Filament(id, label or id, normalize_color(color), normalize_material(material)))
         return self
 
     def add_feature(self, id, label, position, description="", requirements=None):
@@ -130,6 +160,21 @@ class LabeledModel:
                     raise RuntimeError(f"Cutting part {p.id} failed (the shape may not be closed)")
             out[p.id] = m
         return out
+
+    def _part_filaments(self) -> dict[str, str | None]:
+        """Filament id of every part (the first filament for parts without one), or None without filaments."""
+        ids = [f.id for f in self.filaments]
+        out = {}
+        for p in self.parts:
+            if p.filament is not None and p.filament not in ids:
+                raise ValueError(f"Part {p.id} uses filament {p.filament!r}, which add_filament did not define "
+                                 f"(defined: {', '.join(ids) or 'none'})")
+            out[p.id] = p.filament or (ids[0] if ids else None)
+        return out
+
+    def _used_filaments(self, part_filaments: dict) -> list[Filament]:
+        used = set(part_filaments.values())
+        return [f for f in self.filaments if f.id in used]
 
     def _groups(self) -> dict[str, list[Part]]:
         g: dict[str, list[Part]] = {}
@@ -182,10 +227,12 @@ class LabeledModel:
         trimesh.util.concatenate(list(meshes.values())).export(out / "model.stl")
         return self._export_step(out / "model.step")
 
-    def _write_print_outputs(self, d: Path, meshes: dict, groups: dict[str, list[Part]]) -> tuple[dict, dict]:
+    def _write_print_outputs(self, d: Path, meshes: dict, groups: dict[str, list[Part]],
+                             part_filaments: dict) -> tuple[dict, dict]:
         """out/print/<group>.stl: each group fused, rotated and laid out on the printer's bed (p3d.layout).
 
-        Returns (group info, layout summary for parts.json)."""
+        Multi-color models also get out/print/<group>.<filament>.stl: the piece split by filament (later parts win
+        where parts of different filaments overlap), placed the same way. Returns (group info, layout summary)."""
         from .printer import load_printer   # imported here so `python -m p3d.printer` stays warning-free
         printer = load_printer(d)
         posed = {}
@@ -196,6 +243,7 @@ class LabeledModel:
             posed[g] = (pm, M, cfg)
         lay = arrange({g: pm for g, (pm, _, _) in posed.items()}, printer["build_volume_mm"],
                       printer["part_spacing_mm"])
+        multicolor = len(set(part_filaments.values()) - {None}) >= 2
         info = {}
         for g, (pm, M, cfg) in posed.items():
             piece = lay["pieces"][g]
@@ -206,11 +254,23 @@ class LabeledModel:
                        "matrix": [round_list(r, 6) for r in M], "parts": [p.id for p in groups[g]],
                        "size_mm": round_list(pm.extents, 2), "plate": piece["plate"],
                        "bed_turn_deg": piece["turn_deg"], "bed_fit": piece["fit"]}
+            if multicolor:
+                fids = [part_filaments[p.id] for p in groups[g]]
+                if len(set(fids)) == 1:
+                    regions = {fids[0]: None}      # the whole piece is one filament: out/print/<group>.stl
+                else:
+                    part_meshes = [meshes[p.id] for p in groups[g]]
+                    regions = resolve_overlaps(part_meshes, fids)
+                    for fid, rm in regions.items():
+                        transformed(rm, M).export(print_filament_stl(d, g, fid))
+                    info[g]["hidden_parts"] = [groups[g][i].id for i in hidden_parts(part_meshes, fids)]
+                info[g]["filaments"] = list(regions)
         summary = {"printer": printer["name"], "bed_mm": lay["bed_mm"], "spacing_mm": lay["spacing_mm"],
                    "plates": lay["plates"], "plate_pitch_mm": lay["plate_pitch_mm"]}
         return info, summary
 
-    def _parts_json(self, meshes: dict, groups: dict, group_info: dict, layout: dict, step_ok: bool) -> dict:
+    def _parts_json(self, meshes: dict, groups: dict, group_info: dict, layout: dict, step_ok: bool,
+                    part_filaments: dict) -> dict:
         parts = []
         for p in self.parts:
             m = meshes[p.id]
@@ -219,6 +279,7 @@ class LabeledModel:
                 "id": p.id, "label": p.label, "description": p.description, "color": p.color,
                 "anchor": round_list(p.anchor if p.anchor is not None else self._auto_anchor(m), 2),
                 "key_dims": p.key_dims, "requirements": p.requirements, "print_group": p.print_group,
+                "filament": part_filaments[p.id],
                 "bbox_mm": {"min": round_list(lo), "max": round_list(hi), "size": round_list(hi - lo)},
                 "volume_mm3": round(float(m.volume), 1),
                 "watertight": bool(m.is_watertight),
@@ -234,6 +295,7 @@ class LabeledModel:
             "print_orientation": {**self.print_orientation, "groups": group_info},
             "print_layout": layout,
             "objects": {g: self.object_labels.get(g, g) for g in groups},
+            "filaments": [f.__dict__ for f in self._used_filaments(part_filaments)],
             "print_note": self.print_note,
             "parts": parts,
             "features": [f.__dict__ for f in self.features],
@@ -250,6 +312,7 @@ class LabeledModel:
           out/model.glb          for the viewer and reviews (one node per part, Z-up, extras.label)
           out/model.step         only when built with build123d (for CAD editing)
           out/print/<group>.stl  print pose (resting on the bed, fused per group)
+          out/print/<group>.<filament>.stl  multi-color only: the piece split by filament, in print pose
           analysis.json          automatic printability measurements
           viewer.html            3D viewer for checking the model (opens offline)
         """
@@ -264,15 +327,16 @@ class LabeledModel:
                 shutil.rmtree(out / sub)
             (out / sub).mkdir(parents=True, exist_ok=True)
 
+        part_filaments = self._part_filaments()
         meshes = self._part_meshes()
         step_ok = self._write_design_outputs(d, meshes)
         groups = self._groups()
-        group_info, layout = self._write_print_outputs(d, meshes, groups)
+        group_info, layout = self._write_print_outputs(d, meshes, groups, part_filaments)
 
         # the previous parts.json is kept as out/parts.prev.json to detect unintended changes
         if (d / PARTS_JSON).exists():
             shutil.copy2(d / PARTS_JSON, out / "parts.prev.json")
-        write_json(d / PARTS_JSON, self._parts_json(meshes, groups, group_info, layout, step_ok))
+        write_json(d / PARTS_JSON, self._parts_json(meshes, groups, group_info, layout, step_ok, part_filaments))
 
         from .analyze import BLOCKING, analyze_dir
         from .viewer import build_viewer

@@ -9,7 +9,8 @@ UI language (in order of priority):
 Part names, descriptions and key_dims come from model.py as written. Write them in the same language.
 
 Embedded data:
-  parts.json + out/parts/*.stl   part meshes, labels, key dimensions, print orientation, objects (print_group)
+  parts.json + out/parts/*.stl   part meshes, labels, key dimensions, print orientation, objects (print_group),
+                                 filaments (multi-color models get a "part colors / filament colors" switch)
   analysis.json                  overall size, printer settings, overhang angle for the support overlay
                                  (the list of measurements is not shown in the viewer)
 """
@@ -70,6 +71,7 @@ def _part_data(p: dict, mesh) -> dict:
         "id": p["id"], "label": p["label"], "description": p.get("description", ""),
         "color": p["color"], "anchor": p["anchor"], "key_dims": p.get("key_dims", {}),
         "requirements": p.get("requirements", []), "group": p.get("print_group", "main"),
+        "filament": p.get("filament"),
         "size_mm": p["bbox_mm"]["size"],
         "positions": np.round(mesh.vertices, 3).ravel().tolist(),
         "indices": mesh.faces.ravel().astype(int).tolist(),
@@ -92,6 +94,7 @@ def viewer_data(pj: dict, analysis: dict, meshes: dict, lang: str | None = None)
                     "overhang_limit_deg": pr["overhang_limit_deg"]},
         "parts": [_part_data(p, meshes[p["id"]]) for p in pj["parts"]],
         "objects": [{"id": g, "label": labels.get(g, g)} for g in groups],
+        "filaments": pj.get("filaments") or [],
         "overlays": group_overlays(pj, meshes, float(pr["overhang_limit_deg"])),
         "features": pj.get("features", []),
         "groups": groups,
