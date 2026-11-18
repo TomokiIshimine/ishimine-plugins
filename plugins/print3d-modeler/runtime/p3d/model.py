@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 import trimesh
 
-from .filament import normalize_color, normalize_material, resolve_overlaps
+from .filament import hidden_parts, normalize_color, normalize_material, resolve_overlaps
 from .files import PARTS_JSON, part_stl, print_filament_stl, print_stl, write_json
 from .layout import arrange, placement_matrix
 from .meshutil import boolean, fuse, is_build123d, place_on_bed, round_list, to_trimesh, transformed
@@ -259,9 +259,11 @@ class LabeledModel:
                 if len(set(fids)) == 1:
                     regions = {fids[0]: None}      # the whole piece is one filament: out/print/<group>.stl
                 else:
-                    regions = resolve_overlaps([meshes[p.id] for p in groups[g]], fids)
+                    part_meshes = [meshes[p.id] for p in groups[g]]
+                    regions = resolve_overlaps(part_meshes, fids)
                     for fid, rm in regions.items():
                         transformed(rm, M).export(print_filament_stl(d, g, fid))
+                    info[g]["hidden_parts"] = [groups[g][i].id for i in hidden_parts(part_meshes, fids)]
                 info[g]["filaments"] = list(regions)
         summary = {"printer": printer["name"], "bed_mm": lay["bed_mm"], "spacing_mm": lay["spacing_mm"],
                    "plates": lay["plates"], "plate_pitch_mm": lay["plate_pitch_mm"]}

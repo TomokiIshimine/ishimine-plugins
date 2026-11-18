@@ -224,6 +224,7 @@ assert [f["id"] for f in pj["filaments"]] == ["body", "stripe", "dot"], pj["fila
 assert pj["filaments"][1]["material"] is None and pj["filaments"][2]["material"] == "PLA Matte"
 groups = pj["print_orientation"]["groups"]
 assert groups["main"]["filaments"] == ["body", "stripe"] and groups["dot"]["filaments"] == ["dot"], groups
+assert groups["main"]["hidden_parts"] == [] and "hidden_parts" not in groups["dot"], groups
 whole = trimesh.load(d / "out/print/main.stl")
 body, stripe = (trimesh.load(d / f"out/print/main.{f}.stl") for f in ("body", "stripe"))
 assert abs(stripe.volume - 40 * 6 * 2) < 1 and abs(body.volume + stripe.volume - whole.volume) < 1, \
@@ -280,7 +281,43 @@ r = resolve_overlaps([a, b], ["x", "y"])
 assert abs(r["x"].volume - 500) < 1e-6 and abs(r["y"].volume - 1000) < 1e-6, {k: v.volume for k, v in r.items()}
 r = resolve_overlaps([a, b, a.copy()], ["x", "y", "x"])    # a later part of the first filament wins back its volume
 assert abs(r["x"].volume - 1000) < 1e-6 and abs(r["y"].volume - 500) < 1e-6, {k: v.volume for k, v in r.items()}
+from p3d.filament import hidden_parts
+c = trimesh.creation.box((4, 4, 4)); c.apply_translation((20, 0, 0))
+# two parts of filament x, the second (c) entirely inside a later part of y: c is hidden although x still prints
+big = trimesh.creation.box((6, 6, 6)); big.apply_translation((20, 0, 0))
+assert hidden_parts([a, c, big], ["x", "x", "y"]) == [1]
+assert hidden_parts([a, b], ["x", "y"]) == [] and hidden_parts([c, big], ["x", "x"]) == []
 print("later parts win ok")
+PY
+# a covered part is reported even when another part of the same filament still prints
+H="${WORK}/hidden"
+rm -rf "$H" && mkdir -p "$H"
+cat > "${H}/model.py" <<'PY'
+from build123d import Align, Box, Pos
+from p3d import LabeledModel
+
+BOT = (Align.CENTER, Align.CENTER, Align.MIN)
+m = LabeledModel("hidden", title="Hidden", lang="en")
+m.add_filament("white", color="#F2F2F2", material="PLA")
+m.add_filament("black", color="#1A1A1A", material="PLA")
+m.add_part("plate", "Plate", Box(40, 20, 4, align=BOT), filament="white")
+m.add_part("mark", "Mark", Pos(10, 0, 1) * Box(4, 4, 2, align=BOT), filament="white")
+m.add_part("cover", "Cover", Pos(10, 0, 0) * Box(8, 8, 6, align=BOT), filament="black")
+m.set_print_orientation((0, 0, 0), bed_face="bottom")
+m.build(__file__)
+PY
+echo '{"preset": "bambu-a1"}' > "${H}/printer.json"
+(cd "$H" && PYTHONPATH="$RT" "$PY" model.py) > /dev/null
+"$PY" - "$H" <<'PY'
+import json, sys
+from pathlib import Path
+d = Path(sys.argv[1])
+g = json.loads((d / "parts.json").read_text(encoding="utf-8"))["print_orientation"]["groups"]["main"]
+assert g["filaments"] == ["white", "black"] and g["hidden_parts"] == ["mark"], g
+a = json.loads((d / "analysis.json").read_text(encoding="utf-8"))
+hits = [x for x in a["findings"] if x["check"] == "filaments" and "completely covered" in x["issue"]]
+assert [x["part"] for x in hits] == ["mark"], hits
+print("hidden part ok")
 PY
 end
 

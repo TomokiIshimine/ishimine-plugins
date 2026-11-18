@@ -496,8 +496,9 @@ def _check_filaments(d: Path, pj: dict, poses: list[GroupPose], lim: Limits, f: 
     for gp in poses:
         g, gi = gp.name, gp.info
         regions = gi.get("filaments") or []
+        hidden = gi.get("hidden_parts")
         for pid in gp.part_ids:
-            if part_fil[pid] not in regions:
+            if (pid in hidden) if hidden is not None else (part_fil[pid] not in regions):
                 f.add("warning", f"[{g}] Part {pid} is completely covered by later parts of other filaments, so its "
                       f"filament ({names.get(part_fil[pid], part_fil[pid])}) does not print at all", part=pid,
                       check="filaments", evidence=f"filaments printed in {g}: {regions}",

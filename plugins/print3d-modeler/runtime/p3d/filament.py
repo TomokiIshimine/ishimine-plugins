@@ -51,6 +51,23 @@ def is_multicolor(pj: dict) -> bool:
     return len(used_filaments(pj)) >= 2
 
 
+def hidden_parts(meshes: list, filaments: list[str], min_volume: float = 1e-3) -> list[int]:
+    """Indexes of the parts entirely covered by later parts of other filaments (their color never prints).
+
+    Checked part by part, so a part is reported even when another part of the same filament still shows.
+    """
+    from .meshutil import boolean
+    hidden = []
+    for i, (mesh, fid) in enumerate(zip(meshes, filaments)):
+        later = [m for m, f in zip(meshes[i + 1:], filaments[i + 1:]) if f != fid]
+        if not later:
+            continue
+        rest = boolean([mesh, *later], "difference")
+        if rest is not None and (not len(rest.faces) or abs(float(rest.volume)) < min_volume):
+            hidden.append(i)
+    return hidden
+
+
 def resolve_overlaps(meshes: list, filaments: list[str]) -> dict:
     """Split parts of one piece by filament, the later part winning where parts of different filaments overlap.
 
