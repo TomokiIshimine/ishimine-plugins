@@ -25,6 +25,12 @@ project_settings.config names system presets only (printer, process, filament) a
 Studio takes every value from its own presets (PresetCollection::load_external_preset) and changes nothing else.
 Preset names follow resources/profiles/BBL in the BambuStudio repository (profile version 02.09, November 2026).
 
+Print settings (p3d.print_settings): model-wide values go into project_settings.config with their keys listed in
+different_settings_to_system[0], which is what makes Bambu Studio keep them over the system process preset; a piece's
+own values go on its <object> in model_settings.config. curr_bed_type is always written (the Textured PEI Plate, every
+Bambu Lab printer's own default, unless project["bed_type"] names another): without it Bambu Studio opens the project
+on the Cool Plate.
+
 Multi-color: one object per printed piece, holding one part (volume) per filament with that filament's number as its
 `extruder`; filament_settings_id and filament_colour list the project's filaments 1..N (inherits_group and
 different_settings_to_system then have N + 2 entries: process, filaments, printer). The filaments are the project's,
@@ -42,6 +48,7 @@ from pathlib import Path
 import numpy as np
 
 from .bambu_filaments import FILAMENT_PRESETS
+from .print_settings import BED_TYPES, DEFAULT_BAMBU_BED
 
 PLATE_GAP = 1 / 5                       # Bambu Studio LOGICAL_PART_PLATE_GAP
 APPLICATION = "BambuStudio-02.00.00.00"  # oldest version with today's project layout; newer apps open it without a warning
@@ -229,8 +236,11 @@ def write_project(path: str | Path, plates: list[list[tuple]], project: dict, ti
     plates[i] is the list of pieces on plate i + 1, each mesh already in that plate's bed coordinates (front-left
     corner of the bed at 0, 0, bottom at Z = 0). A piece is (name, trimesh mesh), printed with filament 1, or
     (name, mesh, volumes) with volumes = [(part name, filament number 1..N, mesh), ...] that make up the piece
-    (multi-color: one volume per filament). Names need not be unique. project["filaments"], when present, lists the
-    project's filaments [{"preset", "color"}, ...]. Returns where each piece went, in input order:
+    (multi-color: one volume per filament), or (name, mesh, volumes, settings) with the piece's own Bambu Studio
+    settings {key: string value}. Names need not be unique. project["filaments"], when present, lists the
+    project's filaments [{"preset", "color"}, ...]; project["process_settings"] holds model-wide Bambu Studio process
+    settings {key: string value} and project["bed_type"] the curr_bed_type name (default: Textured PEI Plate). Returns where each piece went, in
+    input order:
     [{"name", "plate", "plate_origin_mm", "position_mm"}].
     """
     path = Path(path)
@@ -245,6 +255,7 @@ def write_project(path: str | Path, plates: list[list[tuple]], project: dict, ti
         for piece in pieces:
             name, mesh = piece[0], piece[1]
             volumes = piece[2] if len(piece) > 2 and piece[2] else [(name, 1, mesh)]
+            settings = piece[3] if len(piece) > 3 and piece[3] else {}
             k += 1
             v = np.asarray(mesh.vertices, dtype=float)
             lo, hi = v.min(0), v.max(0)
@@ -279,6 +290,7 @@ def write_project(path: str | Path, plates: list[list[tuple]], project: dict, ti
                 f'  <object id="{obj_id}">\n'
                 f'    <metadata key="name" value="{_esc(name)}"/>\n'
                 f'    <metadata key="extruder" value="{int(volumes[0][1])}"/>\n'
+                + "".join(f'    <metadata key="{_esc(sk)}" value="{_esc(sv)}"/>\n' for sk, sv in sorted(settings.items()))
                 + "".join(parts) + '  </object>\n')
             instances.append(f'    <model_instance>\n      <metadata key="object_id" value="{obj_id}"/>\n'
                              f'      <metadata key="instance_id" value="0"/>\n'
@@ -304,17 +316,22 @@ def write_project(path: str | Path, plates: list[list[tuple]], project: dict, ti
         '<?xml version="1.0" encoding="UTF-8"?>\n<config>\n' + "".join(config_objects) + "".join(config_plates)
         + "</config>\n")
     filaments = project.get("filaments") or [{"preset": project["filament_preset"], "color": FILAMENT_COLOUR}]
-    files["Metadata/project_settings.config"] = json.dumps({
+    process = dict(sorted((project.get("process_settings") or {}).items()))
+    ps = {
         "name": "project_settings", "from": "project",
         "printer_model": project["printer_model"],
         "printer_settings_id": project["printer_preset"],
         "print_settings_id": project["print_preset"],
         "filament_settings_id": [f["preset"] for f in filaments],
         "filament_colour": [f["color"] for f in filaments],
-        # one entry each for the process, every filament and the printer: nothing differs from the system presets
+        # one entry each for the process, every filament and the printer; a process value counts only when its key
+        # is listed in the first entry, everything else comes from the system presets
         "inherits_group": [""] * (len(filaments) + 2),
-        "different_settings_to_system": [""] * (len(filaments) + 2),
-    }, indent=4) + "\n"
+        "different_settings_to_system": [";".join(process)] + [""] * (len(filaments) + 1),
+        **process,
+    }
+    ps["curr_bed_type"] = project.get("bed_type") or BED_TYPES[DEFAULT_BAMBU_BED]
+    files["Metadata/project_settings.config"] = json.dumps(ps, indent=4) + "\n"
 
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr("[Content_Types].xml", CONTENT_TYPES)

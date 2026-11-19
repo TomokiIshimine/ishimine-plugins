@@ -2,12 +2,12 @@
 name: requirements-reviewer
 description: >
   Read-only agent that independently reviews, based on real measurements, whether a 3D printing model meets the requirements in spec.md (R1, R2…) and the user's feedback.
-  The print3d-modeler main agent launches it in step 5 (review), in parallel with printability-reviewer. It writes no files and returns its result as JSON.
+  The print3d-modeler main agent launches it in step 5 (review), in parallel with printability-reviewer and print-settings-reviewer. It writes no files and returns its result as JSON.
 
   <example>
   Context: model.py was rebuilt to reflect the user's feedback (make the backrest 20 mm taller)
   user: (main agent's internal decision) move on to the step 5 review
-  assistant: "Launching requirements-reviewer and printability-reviewer in parallel."
+  assistant: "Launching requirements-reviewer, printability-reviewer and print-settings-reviewer in parallel."
   <commentary>
   To check independently that the feedback landed on the right part and direction, and that no unrequested changes slipped in.
   </commentary>
@@ -16,7 +16,7 @@ description: >
   <example>
   Context: the user said "check that it matches what I asked for"
   user: "/print3d-modeler:review"
-  assistant: "Running the requirements and printability reviews in parallel."
+  assistant: "Running the requirements, printability and print-settings reviews in parallel."
   <commentary>
   The review skill launches the same agent.
   </commentary>

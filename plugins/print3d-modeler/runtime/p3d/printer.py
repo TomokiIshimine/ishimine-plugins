@@ -4,6 +4,7 @@
     python -m p3d.printer --presets                   list the built-in presets
     python -m p3d.printer --find "A1 mini"            match a printer name to a preset key
     python -m p3d.printer --save DIR --preset bambu-a1 [--nozzle 0.6] [--material PETG] [--nozzle-mode dual]
+                          [--bed-type cool]
     python -m p3d.printer --save DIR --name "My printer" --volume 200x200x180 [--nozzle 0.4] [--material PLA]
 
 Lookup order (the first file found wins):
@@ -19,6 +20,7 @@ printer.json examples:
   {"preset": "bambu-a1-mini"}                         # use a preset as is
   {"preset": "bambu-h2d", "nozzle_mode": "dual"}      # dual-nozzle printing area of a two-nozzle printer
   {"preset": "ender3-v3-se", "nozzle_mm": 0.6}        # preset with some overrides
+  {"preset": "bambu-a1", "bed_type": "cool"}          # build plate in use (Bambu Lab printers default to textured_pei)
   {"name": "My custom printer", "build_volume_mm": [200, 200, 180], "nozzle_mm": 0.4}
 """
 from __future__ import annotations
@@ -30,6 +32,7 @@ import sys
 from pathlib import Path
 
 from .files import read_json, write_json
+from .print_settings import BED_TYPES, bed_type
 
 PRINTER_JSON = "printer.json"
 VENV_STAMP = ".p3d-requirements"   # written into the venv by setup_env.sh
@@ -48,7 +51,7 @@ DEFAULT = {
 }
 
 OVERRIDABLE = ("build_volume_mm", "nozzle_mm", "layer_height_mm", "material", "overhang_limit_deg",
-               "max_bridge_mm", "clearance_mm", "min_bed_contact_mm2", "part_spacing_mm", "nozzle_mode")
+               "max_bridge_mm", "clearance_mm", "min_bed_contact_mm2", "part_spacing_mm", "nozzle_mode", "bed_type")
 
 # build_volume_mm is [X (left-right), Y (front-back), Z (height)] in mm.
 # Bambu Lab figures were checked against bambulab.com spec pages in November 2026. For two-nozzle printers,
@@ -118,6 +121,9 @@ def resolve(cfg: dict | None) -> dict:
         if not out.get("dual_nozzle_volume_mm"):
             raise ValueError(f"{out['name']} has no dual-nozzle printing area (nozzle_mode: dual)")
         out["build_volume_mm"] = list(out["dual_nozzle_volume_mm"])
+    bed = bed_type(out)   # raises on an unknown bed type
+    if bed is not None:
+        out["bed_type"] = bed
     return out
 
 
@@ -202,6 +208,7 @@ def main(argv):
     ap.add_argument("--nozzle", type=float)
     ap.add_argument("--material")
     ap.add_argument("--nozzle-mode", choices=["single", "dual"])
+    ap.add_argument("--bed-type", choices=list(BED_TYPES), help="build plate in use (Bambu Lab: textured_pei by default)")
     a = ap.parse_args(argv)
     try:
         return _run(ap, a)
@@ -225,7 +232,8 @@ def _run(ap: argparse.ArgumentParser, a: argparse.Namespace) -> int:
             ap.error("--save needs --preset, or --name together with --volume")
         cfg = {"preset": a.preset} if a.preset else {"name": a.name}
         for key, val in (("name", a.name if a.preset else None), ("build_volume_mm", a.volume),
-                         ("nozzle_mm", a.nozzle), ("material", a.material), ("nozzle_mode", a.nozzle_mode)):
+                         ("nozzle_mm", a.nozzle), ("material", a.material), ("nozzle_mode", a.nozzle_mode),
+                         ("bed_type", a.bed_type)):
             if val is not None:
                 cfg[key] = val
         print(json.dumps(save(Path(a.save), cfg, a.folder_only), ensure_ascii=False, indent=2))

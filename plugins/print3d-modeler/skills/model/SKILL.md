@@ -4,7 +4,8 @@ description: >
   Use when designing and creating a new model to print on an FDM 3D printer, working through it with the user.
   Triggered by requests like "I want to 3D print a ...", "make a phone stand model", "make an STL for 3D printing",
   "design a part I can print", or "/print3d-modeler:model". Runs the whole flow: hearing → design → implementation
-  in Python (build123d) → two independent reviews → user check in a 3D viewer → print-ready STL/3MF export.
+  in Python (build123d) → three independent reviews → user check in a 3D viewer → print-ready STL/3MF export
+  with the slicer settings it needs.
 argument-hint: "[what to make]"
 metadata:
   version: "0.1.0"
@@ -13,7 +14,7 @@ metadata:
 # Create a model for 3D printing (entry point)
 
 Turn the user's "I want to make something like this" into files they can print as is on an FDM 3D printer.
-You (the main agent) do the conversation, design, implementation, runs and export yourself. Only the reviews go to two independent subagents.
+You (the main agent) do the conversation, design, implementation, runs and export yourself. Only the reviews go to three independent subagents.
 
 What to make (argument): $ARGUMENTS
 
@@ -52,9 +53,9 @@ Keep identifiers in English in every language: part ids, file and folder names, 
 |---|---|---|
 | 1. Hearing | Ask about purpose, size, shape, movement/assembly, and printing setup | `spec.md` (requirements R1, R2…) and `print3d/printer.json` exist |
 | 2. Design | Decide the parts, dimensions and candidate print orientations; confirm the key points | `design.md` and a confirmed part list |
-| 3. Implement | Write `model.py` (one `add_part` per part) | `model.py` exists |
+| 3. Implement | Write `model.py` (one `add_part` per part, and `set_print_settings` for the slicer settings it needs) | `model.py` exists |
 | 4. Run and self-check | Run `PYTHONPATH=RT PY model.py` and fix obvious failures yourself | `parts.json` `analysis.json` `out/` `viewer.html` exist |
-| 5. Review | Launch the two reviewers in parallel → fix FAILs and review again (up to 3 rounds) | `reviews/iter-N-*.json` |
+| 5. Review | Launch the three reviewers in parallel → fix FAILs and review again (up to 3 rounds) | `reviews/iter-N-*.json` |
 | 6. User check | Have the user look at the viewer and give instructions in chat | Feedback added to `spec.md` (→ back to step 2 or 3) / the user says OK |
 | 7. Export | Write STL/3MF in print orientation and the print notes | `out/final/*.3mf` `*.stl` `print-notes.md` |
 
@@ -68,15 +69,17 @@ At the end of each step, record 1–3 lines in `history.md` (`resume` uses it to
 - When printability and the user's wishes conflict (for example, the wall they want is too thin), do not decide alone. Lay out alternatives and let the user choose.
 - Map the user's instructions to part labels (`label` in `parts.json`) and directions (up/down, front/back, left/right), add them to `spec.md` as requirements, then make the change. If an instruction is ambiguous, ask back with AskUserQuestion.
 - Multi-color printing only when the user wants it: do not ask about colors otherwise, so one-color models go exactly as before. Name filaments by color and material (never AMS slots); the material may stay undecided until export. See "Filaments" in `modeling-conventions`.
+- Slicer settings: choose them yourself in model.py with `set_print_settings` (supports, brim, walls, infill, layer height; whole model or one piece) from the requirements and the measurements, following "Print settings" in `printability-rules`, and give the reason. Do not quiz the user on slicer settings; ask only when a choice changes what they get (for example support marks on a visible face, or a slower finer print). The bed type is in `printer.json` (`bed_type`; Bambu Lab printers default to the textured PEI plate).
 - Directions always refer to the model as used. The print orientation is kept separately as a rotation in `set_print_orientation`.
 - When showing the viewer, if a tool for creating artifacts is available, show the contents of `viewer.html` as an artifact as is (it is a single self-contained file that loads nothing external). Always also give a link to the file (in Cowork use the `computer://<absolute path>` form; it works offline when opened in a browser).
 
 ## Launching the reviews (step 5)
 
-Launch both with the Agent tool **in parallel, in the same message**.
+Launch all three with the Agent tool **in parallel, in the same message**.
 
 - `print3d-modeler:printability-reviewer` … can it be printed?
 - `print3d-modeler:requirements-reviewer` … does it meet the requirements?
+- `print3d-modeler:print-settings-reviewer` … do the slicer settings (supports, brim, walls, infill, layer height, bed type) suit it, and do they reach the slicer?
 
 The prompt contains only this (example):
 
@@ -87,8 +90,8 @@ runtime: /abs/path/print3d-modeler/runtime
 iteration: 1
 ```
 
-Save the returned JSON as is to `reviews/iter-<N>-printability.json` and `reviews/iter-<N>-requirements.json`.
-If both PASS, go to step 6. If anything FAILs, fix it, run again and review again (N+1). Anything still open after 3 rounds: summarize the finding, cause and options, and ask the user to decide with AskUserQuestion.
+Save the returned JSON as is to `reviews/iter-<N>-printability.json`, `reviews/iter-<N>-requirements.json` and `reviews/iter-<N>-print-settings.json`.
+If all three PASS, go to step 6. If anything FAILs, fix it, run again and review again (N+1). Anything still open after 3 rounds: summarize the finding, cause and options, and ask the user to decide with AskUserQuestion.
 Ask the `questions_for_user` from `requirements-reviewer` (requirements it could not judge) with AskUserQuestion in step 6.
 
 ## User check (step 6)

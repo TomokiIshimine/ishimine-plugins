@@ -27,6 +27,7 @@ from .filament import normalize_material, used_filaments
 from .files import ANALYSIS_JSON, load_dir, load_mesh, print_filament_stl, print_stl, write_json
 from .layout import DIAGONAL, fits_bed, is_current
 from .meshutil import boolean, direction_label, fuse, np_default, place_on_bed, round_list, transformed
+from .print_settings import with_layer_height
 from .printer import load_printer
 
 __all__ = ["analyze_dir", "group_overlays", "load_dir", "BLOCKING", "SEVERITY_RANK"]
@@ -558,7 +559,7 @@ def _check_filaments(d: Path, pj: dict, poses: list[GroupPose], lim: Limits, f: 
 def analyze_dir(d: str | Path, write: bool = True) -> dict:
     d = Path(d)
     pj, part_meshes = load_dir(d)
-    printer = load_printer(d)
+    printer = with_layer_height(load_printer(d), pj)
     lim = Limits(printer)
     findings = Findings()
 

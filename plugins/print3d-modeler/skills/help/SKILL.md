@@ -23,7 +23,7 @@ These instructions are in English, but **answer in the user's language**: the la
 
 **No topic** → a short overview that fits on one screen, in this order:
 
-1. **What it is** (1–2 sentences): designs a model for an FDM 3D printer through conversation, checks it with automatic measurements, two independent reviews and a 3D viewer, and hands back print-ready 3MF / STL.
+1. **What it is** (1–2 sentences): designs a model for an FDM 3D printer through conversation, checks it with automatic measurements, three independent reviews and a 3D viewer, and hands back print-ready 3MF / STL with the slicer settings it needs.
 2. **Getting started**: just describe what to make ("I want to 3D print a phone stand", or `/print3d-modeler:model phone stand`). Mentioning the printer model and the size of the object it holds or fits saves questions. The first run spends a few minutes installing Python packages (Python 3.10+ and access to PyPI are needed once).
 3. **Commands**: the table below.
 4. **How a model is made**: the steps below, in one line each.
@@ -53,7 +53,7 @@ Explain it for the user, not for Claude: leave out PY/RT, environment variables,
 | `/print3d-modeler:model [what to make]` | "I want to 3D print a phone stand" | Starts a new model and runs the whole flow, from questions to export |
 | `/print3d-modeler:resume [model name]` | "Continue the model from earlier" | Picks up an unfinished model where it stopped |
 | `/print3d-modeler:view [model name]` | "Show it in 3D" | Rebuilds and opens the 3D viewer |
-| `/print3d-modeler:review [model name]` | "Check whether it can be printed" | Reruns only the two independent reviews |
+| `/print3d-modeler:review [model name]` | "Check whether it can be printed" | Reruns only the three independent reviews |
 | `/print3d-modeler:export [model name]` | "Give me the files to print" | Writes 3MF / STL in print orientation, plus print notes |
 | `/print3d-modeler:printer [printer or X×Y×Z]` | "My printer is an A1 mini" | Sets and remembers your printer (build volume, nozzle size, material); presets for the main Bambu Lab models and others |
 | `/print3d-modeler:help [topic]` | "How do I use this?" | This help |
@@ -65,9 +65,9 @@ Commands are optional: asking in plain words works the same. Without a model nam
 1. **Questions**: purpose, size, shape, how parts fit or move, and your printer. Answers become numbered requirements (R1, R2…).
 2. **Design**: the model is split into named parts ("Base", "Backrest") with dimensions and a print orientation; you confirm the key points.
 3. **Build**: Claude writes the model in Python and fixes obvious problems found by automatic measurements (wall thickness, overhangs, bed contact, build volume…).
-4. **Review**: two independent reviewers check "will it print?" and "does it meet the requirements?"; Claude fixes what they find, up to 3 rounds, before showing you.
+4. **Review**: three independent reviewers check "will it print?", "does it meet the requirements?" and "do the print settings (supports, brim, walls, infill…) suit it?"; Claude fixes what they find, up to 3 rounds, before showing you.
 5. **Your check**: a 3D viewer opens. Hover a part to see its name (P1, P2…) and click it to copy the name, then ask for changes in chat with part names and directions: "make P2 Backrest 10 mm taller". Steps 2–5 repeat until you are happy.
-6. **Export**: 3MF / STL already placed in print orientation, and print notes (supports, brim, recommended settings). The 3MF opens directly in Bambu Studio, PrusaSlicer, OrcaSlicer or Cura.
+6. **Export**: 3MF / STL already placed in print orientation, and print notes (supports, brim, settings). The 3MF opens directly in Bambu Studio, PrusaSlicer, OrcaSlicer or Cura; with a Bambu Lab printer it already carries the settings and the bed type, and every 3MF is format-checked before it is handed over.
 
 Good to know (mention when relevant, not all at once):
 

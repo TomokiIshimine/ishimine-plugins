@@ -2,12 +2,12 @@
 name: printability-reviewer
 description: >
   Read-only agent that independently reviews, based on measurements, whether a 3D printing model will actually print on an FDM printer.
-  The print3d-modeler main agent launches it in step 5 (review), in parallel with requirements-reviewer. It writes no files and returns its result as JSON.
+  The print3d-modeler main agent launches it in step 5 (review), in parallel with requirements-reviewer and print-settings-reviewer. It writes no files and returns its result as JSON.
 
   <example>
   Context: model.py ran, viewer.html was generated, and the self-check passed
   user: (main agent's internal decision) move on to the step 5 review
-  assistant: "Launching printability-reviewer and requirements-reviewer in parallel."
+  assistant: "Launching printability-reviewer, requirements-reviewer and print-settings-reviewer in parallel."
   <commentary>
   Before showing the model to the user, printability must be checked from an independent point of view.
   </commentary>
@@ -16,7 +16,7 @@ description: >
   <example>
   Context: the user said "just redo the review"
   user: "/print3d-modeler:review phone-stand"
-  assistant: "Running the printability and requirements reviews in parallel."
+  assistant: "Running the printability, requirements and print-settings reviews in parallel."
   <commentary>
   The review skill launches the same agent.
   </commentary>

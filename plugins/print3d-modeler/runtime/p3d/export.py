@@ -13,8 +13,14 @@ Outputs:
                                   (plain 3MF has no plates, so one file per plate)
   out/final/<model>_<group>.stl   one STL per piece, placed where it sits on its plate
   out/final/<model>_<group>_<filament>.stl  multi-color pieces only: the part of the piece printed with that filament
-Stdout: JSON with the facts needed to write the print notes (print-notes.md), including `layout` and, for models
-with filaments, `filaments` (number in the slicer, color, material, preset, weight)
+Stdout: JSON with the facts needed to write the print notes (print-notes.md), including `layout`, `print_settings`
+(the settings from set_print_settings, the bed type and what went into the 3MF), `format_check` (p3d.check3mf on every
+3MF written; do not hand over files whose check failed) and, for models with filaments, `filaments` (number in the
+slicer, color, material, preset, weight)
+
+Print settings (LabeledModel.set_print_settings, p3d.print_settings): Bambu Lab printers get them in the project
+(model-wide ones as changes to the process preset, a piece's own ones on that object) together with the bed type;
+other printers' 3MF files carry no slicer settings, so they go into the print notes only.
 
 Multi-color models (parts on two or more filaments, see p3d.filament): each piece is one object made of one part per
 filament. Bambu Lab printers get the filaments' colors and presets in the project (Bambu Studio maps them to the AMS
@@ -34,7 +40,9 @@ from pathlib import Path
 import numpy as np
 import trimesh
 
+from . import print_settings as ps
 from .bambu import filament_preset, project_for, write_project
+from .check3mf import check_file
 from .filament import density, normalize_material, used_filaments
 from .layout import is_current
 from .files import ANALYSIS_JSON, PARTS_JSON, load_mesh, print_filament_stl, print_stl, read_json
@@ -139,7 +147,7 @@ def export_dir(d: str | Path, materials: dict | None = None) -> dict:
     """Write out/final/. materials: {filament id: material} decided at export time (overrides model.py)."""
     d = Path(d)
     pj = read_json(d / PARTS_JSON)
-    printer = load_printer(d)
+    printer = ps.with_layer_height(load_printer(d), pj)
     fin = d / "out" / "final"
     fin.mkdir(parents=True, exist_ok=True)
     for old in fin.glob("*"):
@@ -154,6 +162,8 @@ def export_dir(d: str | Path, materials: dict | None = None) -> dict:
     X, Y, Z = (float(v) for v in printer["build_volume_mm"])
     lay = _layout_status(pj, printer)
     project = project_for(printer)
+    pset = ps.summarize(pj, printer, project["print_preset"] if project else None,
+                        read_json(d / ANALYSIS_JSON) if (d / ANALYSIS_JSON).is_file() else {})
     # where the printer's build volume starts on the bed (not at x = 0 for the two-nozzle area of some printers)
     x0, y0 = project["area_origin_mm"] if project else (0.0, 0.0)
     plates: dict[int, list] = {}
@@ -187,7 +197,7 @@ def export_dir(d: str | Path, materials: dict | None = None) -> dict:
                 f["volume_mm3"] = f.get("volume_mm3", 0.0) + fv
                 group_g += fv / 1000 * density(f["material"])
                 volumes.append((f"{name} - {f['label']}", f["filament"], vm))
-        plates.setdefault(plate, []).append((name, m, volumes))
+        plates.setdefault(plate, []).append((name, m, volumes, pset["bambu"]["groups"].get(g, {})))
         lo, hi = m.bounds
         on_bed = bool(lo[0] >= x0 - 0.01 and lo[1] >= y0 - 0.01 and hi[0] <= x0 + X + 0.01
                       and hi[1] <= y0 + Y + 0.01 and hi[2] <= Z + 0.01)
@@ -225,6 +235,8 @@ def export_dir(d: str | Path, materials: dict | None = None) -> dict:
     if project and fls:
         project["filaments"] = [{"preset": f["slicer_preset"], "color": f["color"]} for f in fls]
     if project:
+        project["process_settings"] = pset["bambu"]["model"]
+        project["bed_type"] = ps.BED_TYPES.get(pset["bed_type"]) if pset["bed_type"] else None
         tmf = fin / f"{pj['model']}.3mf"
         write_project(tmf, [plates.get(k, []) for k in range(1, n_plates + 1)], project, title=pj["title"])
         tmfs.append(str(tmf.relative_to(d)))
@@ -232,14 +244,14 @@ def export_dir(d: str | Path, materials: dict | None = None) -> dict:
         for plate in sorted(plates):
             suffix = f"_plate{plate}" if len(plates) > 1 else ""
             tmf = fin / f"{pj['model']}{suffix}.3mf"
-            write_plain_3mf(tmf, [(name, [(fv - 1, vm) for _, fv, vm in vols]) for name, _, vols in plates[plate]],
+            write_plain_3mf(tmf, [(name, [(fv - 1, vm) for _, fv, vm in vols]) for name, _, vols, _ in plates[plate]],
                             fls, title=pj["title"])
             tmfs.append(str(tmf.relative_to(d)))
     else:
         for plate in sorted(plates):
             scene = trimesh.Scene()
             used = set()
-            for name, m, _ in plates[plate]:
+            for name, m, *_ in plates[plate]:
                 # trimesh overwrites a node whose name is already taken, and labels need not be unique
                 node, k = name, 2
                 while node in used:
@@ -257,6 +269,11 @@ def export_dir(d: str | Path, materials: dict | None = None) -> dict:
         where = ("plates 1-%d in one 3MF (Bambu Studio project)" % n_plates if project else "one 3MF per plate")
         warnings.append(f"The pieces do not fit on one plate of {printer['name']} ({X:g}×{Y:g} mm): "
                         f"{n_plates} print runs, {where}")
+    warnings += pset.pop("warnings")
+    checks = {t: check_file(d / t) for t in tmfs}
+    fmt = {"ok": all(c["ok"] for c in checks.values()), "files": checks}
+    if not fmt["ok"]:
+        warnings.append("The 3MF format check failed (format_check): do not hand these files over; report the errors")
     warnings += [f"Piece {i['group']} does not fit the build volume of {printer['name']} ({X:g}×{Y:g}×{Z:g} mm)"
                  for i in info if not i["fits_bed"]]
     return {
@@ -270,6 +287,7 @@ def export_dir(d: str | Path, materials: dict | None = None) -> dict:
                             **({"filament_presets": [f["preset"] for f in project["filaments"]]} if fls else {})}
                            if project else None),
         "groups": info, "analysis": _analysis_summary(d), "print_note": pj.get("print_note", ""),
+        "print_settings": pset, "format_check": fmt,
         "note": WEIGHT_NOTE,
         **({"multicolor": multicolor, "filaments": fls} if fls else {}),
     }

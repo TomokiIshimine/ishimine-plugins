@@ -42,14 +42,16 @@ so also keep the printer in your own memory if you have one (see step 5).
    nozzles reach. Ask only when the model needs two materials; otherwise keep single.
 4. Save. DIR is the `print3d/` folder under the user's working folder (create it if needed):
    ```bash
-   cd RT && PY -m p3d.printer --save DIR --preset <key> [--nozzle 0.6] [--material PETG] [--nozzle-mode dual]
+   cd RT && PY -m p3d.printer --save DIR --preset <key> [--nozzle 0.6] [--material PETG] [--nozzle-mode dual] [--bed-type cool]
    cd RT && PY -m p3d.printer --save DIR --name "<model name>" --volume 200x200x180 [--nozzle 0.4] [--material PLA]
    ```
    This writes `DIR/printer.json` and the remembered printer. Add `--folder-only` when the user wants these settings
    only for this folder (for example a second printer used for one project). For one model only, write
    `print3d/<model>/printer.json` with the Write tool in the same JSON shape (`{"preset": "<key>", ...}`).
    Other keys that can be set in printer.json: `layer_height_mm` `overhang_limit_deg` `max_bridge_mm` `clearance_mm`
-   `min_bed_contact_mm2` `part_spacing_mm` `build_volume_mm`.
+   `min_bed_contact_mm2` `part_spacing_mm` `build_volume_mm` `bed_type`.
+   Bed type (`--bed-type`): `textured_pei` (Bambu Lab default), `smooth_pei`, `cool`, `engineering`, `supertack`. Set it
+   only when the user says they use another plate; it goes into the Bambu Studio project and decides the bed temperature.
 5. If you have a persistent memory (a memory tool, memory files, or project memory), save one line there too, in the
    user's language, such as: "3D printer: Bambu Lab A1 mini (print3d-modeler preset bambu-a1-mini), 0.4 mm nozzle, PLA".
    Next time, when `p3d.printer` reports `"source": "default"`, use that line to run step 4 without asking again.

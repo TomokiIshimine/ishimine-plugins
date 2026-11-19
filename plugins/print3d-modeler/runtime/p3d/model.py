@@ -74,6 +74,8 @@ class LabeledModel:
     - lang is the viewer's UI language ("en" or "ja"). None picks it from the labels (Japanese text -> "ja").
     - Multi-color: define filaments by color and material with add_filament and give each part a filament.
       Without filaments (or with one) every output is the same as for a one-color model.
+    - Slicer settings that the model needs (walls, infill, supports, brim, layer height) go in set_print_settings,
+      for the whole model or one piece. They are written into the Bambu Studio project and the print notes.
     """
 
     def __init__(self, name: str, title: str | None = None, lang: str | None = None):
@@ -89,6 +91,9 @@ class LabeledModel:
         self.group_orientation: dict[str, dict] = {}
         self.object_labels: dict[str, str] = {}
         self.filaments: list[Filament] = []
+        self.print_settings: dict = {}
+        self.group_print_settings: dict[str, dict] = {}
+        self.print_settings_reason = ""
         self.print_note = ""
 
     # ------------------------------------------------------------------ definition
@@ -139,6 +144,27 @@ class LabeledModel:
             self.print_orientation = cfg
         else:
             self.group_orientation[group] = cfg
+        return self
+
+    def set_print_settings(self, group=None, reason="", **settings):
+        """Slicer settings the model needs, in plain words. Only what is named changes; the rest stays as the slicer's
+        preset has it. Pass group (a print_group) for one piece; its settings win over the whole model's.
+
+        layer_height (mm, whole model only), walls (1-20), top_layers / bottom_layers (0-30), infill (percent),
+        infill_pattern ("grid", "gyroid", "cubic", "honeycomb", "triangles", "lightning", "crosshatch", "zig-zag",
+        "line", "concentric", "adaptivecubic", "tri-hexagon"), supports ("none", "normal", "tree"),
+        supports_from_bed_only (True/False), brim ("auto", "none", "outer", "ears"), brim_width (mm).
+        reason: why, in the user's language (goes into the print notes).
+        Calling again adds to the earlier settings; pass None to drop one.
+        """
+        from .print_settings import normalize   # imported here so `python -m p3d.print_settings` runs cleanly
+        target = self.print_settings if group is None else self.group_print_settings.setdefault(group, {})
+        for k, v in settings.items():
+            if v is None:
+                target.pop(k, None)
+        target.update(normalize(settings, whole_model=group is None))
+        if reason:
+            self.print_settings_reason = (self.print_settings_reason + " " + reason).strip()
         return self
 
     def set_object_label(self, group, label):
@@ -296,6 +322,9 @@ class LabeledModel:
             "print_layout": layout,
             "objects": {g: self.object_labels.get(g, g) for g in groups},
             "filaments": [f.__dict__ for f in self._used_filaments(part_filaments)],
+            "print_settings": {"model": dict(self.print_settings),
+                               "groups": {g: dict(s) for g, s in self.group_print_settings.items() if s},
+                               "reason": self.print_settings_reason},
             "print_note": self.print_note,
             "parts": parts,
             "features": [f.__dict__ for f in self.features],
@@ -331,6 +360,10 @@ class LabeledModel:
         meshes = self._part_meshes()
         step_ok = self._write_design_outputs(d, meshes)
         groups = self._groups()
+        unknown = sorted(set(self.group_print_settings) - set(groups))
+        if unknown:
+            raise ValueError(f"set_print_settings names print groups that no part uses: {', '.join(unknown)} "
+                             f"(groups: {', '.join(groups)})")
         group_info, layout = self._write_print_outputs(d, meshes, groups, part_filaments)
 
         # the previous parts.json is kept as out/parts.prev.json to detect unintended changes
