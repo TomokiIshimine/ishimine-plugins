@@ -37,6 +37,7 @@ Write everything the user reads in the user's language (see "Language" in SKILL.
 - Use separate `print_group`s for pieces printed separately. `build()` lays them out on the printer's bed (turning them about Z at any angle and packing their real outlines, i.e. the whole piece seen from above including overhangs, so concave pieces nest) and puts what does not fit onto further plates; keep each piece within the build volume, and if the user wants everything in one print run, size the pieces so they fit one plate together. Fit clearance is 0.2–0.4 mm per side (`clearance_mm` in printer.json).
 - Horizontal holes (holes running sideways) need no support if the top is pointed at 45° (teardrop).
 - A large flat bottom makes printing stable. Do not fillet the edges of the bottom face (causes warping and detaching).
+- Slicer settings: after `set_print_orientation`, add `m.set_print_settings(...)` for what the model needs, following "Print settings" in `printability-rules`: walls and infill from the strength requirements, supports for the pieces with overhangs the shape cannot avoid, a brim for small or tall bases, a finer `layer_height` for small details. Use `group="<print_group>"` for one piece's own settings, and `reason=` (in the user's language, naming requirement IDs) for the print notes. Leave out what the slicer preset already does well. A Bambu Lab printer gets them in the 3MF project; other printers in the print notes.
 - How to write build123d: `modeling-conventions/references/build123d-cheatsheet.md`.
 
 ## Step 4. Run and self-check
@@ -49,14 +50,16 @@ cd DIR && PYTHONPATH=RT PY model.py
 - A piece too big for the printer (`build_volume`, critical) needs a decision: another print orientation, splitting it into pieces that are assembled, or scaling it down. Tell the user plainly that it does not fit their printer, with the size and the build volume, and ask with AskUserQuestion which way to go unless one is obviously right.
 - A `layout` warning means the pieces need more than one plate (print run). Tell the user how many and which pieces go together; it is fine if they accept it.
 - `filaments` findings (multi-color): more filaments than the AMS feeds is major; a hidden part, a color thinner than 2 layers or the nozzle, or mixed base materials are warnings to fix or tell the user about.
+- Check the settings with `cd RT && PY -m p3d.print_settings DIR`: fix its `warnings` (supports missing on a piece with overhang findings, a layer height out of range) or have a reason for them. After a run, set supports for pieces whose overhangs you keep.
 - Check dimensions with `cd RT && PY -m p3d.measure DIR` (`--part id` `--section z=30` `--distance a b` `--ray x,y,z dx,dy,dz`).
 - Aim for one run to take under 30 seconds. If it is slow, revisit fillets, text and fine repeated shapes.
 
 ## Step 5. Review
 
-- Launch the two reviewers in parallel as described in "Launching the reviews" in SKILL.md.
-- Save to `DIR/reviews/iter-N-printability.json` and `DIR/reviews/iter-N-requirements.json` (the returned JSON as is; if there is text around it, only the JSON part).
-- Verdict: passes when `verdict` is PASS for both. Put warnings in `print-notes.md`.
+- Launch the three reviewers in parallel as described in "Launching the reviews" in SKILL.md.
+- Save to `DIR/reviews/iter-N-printability.json`, `DIR/reviews/iter-N-requirements.json` and `DIR/reviews/iter-N-print-settings.json` (the returned JSON as is; if there is text around it, only the JSON part).
+- Verdict: passes when `verdict` is PASS for all three. Put warnings and `print_notes` in `print-notes.md`.
+- Print-settings findings are usually fixed with the `set_print_settings` call in their `suggestion` (or `bed_type` in printer.json); a shape change can also remove the need (a chamfer instead of supports, a wider base instead of a brim).
 - Fixing FAILs: use `part`, `direction` and `suggestion` in each finding to fix model.py → step 4 → review again (N+1). Record what you changed in `history.md`.
 - For findings still open after 3 rounds, let the user choose with AskUserQuestion, for example "A: fix it like this (impact …) / B: print as is (risk …) / C: change the requirement".
 
@@ -87,7 +90,7 @@ Follow the `export` skill.
 ## v3 (2026-11-04 15:20) step 6 → step 3
 - User feedback: make the backrest 20 mm taller (R2 changed from 100 to 120 mm)
 - model.py: BACK_H 100→120
-- Review iter-4: printability PASS / requirements PASS
+- Review iter-4: printability PASS / requirements PASS / print settings PASS
 ```
 
 Always write the leading `## vN … step X` line, in English, whatever the conversation language (resume reads the last one to decide where to pick up). The bullet lines below it can be in the user's language.

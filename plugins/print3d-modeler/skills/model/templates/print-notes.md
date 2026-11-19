@@ -18,14 +18,19 @@
 ## Print orientation
 - <per piece: which face goes down>
 
-## Recommended settings (<printer>, <0.4> mm nozzle, <PLA>)
-| Setting | Recommendation |
-|---|---|
-| Layer height | 0.2 mm |
-| Walls (perimeters) | 3 |
-| Infill | 15–20% (30–40% if it bears load) |
-| Supports | Not needed / Needed (where: …) |
-| Bed adhesion | No brim needed / 5 mm brim recommended (reason: small contact area) |
+## Print settings (<printer>, <0.4> mm nozzle, <PLA>, <bed type>)
+<!-- From print_settings in the export JSON. With a Bambu Lab printer say that these are already set in the 3MF
+     (process preset shown as modified; per-piece settings on the object). Otherwise the user sets them by hand. -->
+| Setting | Value | Where it applies |
+|---|---|---|
+| Layer height | 0.2 mm (preset) | whole model |
+| Walls (perimeters) | 3 | whole model |
+| Infill | 25 % gyroid | whole model / <piece> |
+| Supports | none / tree, from the bed only (where: …) | <piece> |
+| Brim | auto (preset) / 5 mm outer (reason: small contact area) | <piece> |
+| Bed | Textured PEI plate | — |
+
+- Why: <reason, naming requirement IDs>
 
 ## Estimates
 - Size: … mm / Volume: … cm³ / Weight upper bound (100% infill): … g

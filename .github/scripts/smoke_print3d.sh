@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # End-to-end smoke test for print3d-modeler: build the sample model with the plugin runtime and
-# run every CLI the skills use (analyze / measure / viewer / printer / export).
+# run every CLI the skills use (analyze / measure / viewer / printer / print_settings / export / check3mf).
 #
 #   .github/scripts/smoke_print3d.sh <python> <work dir>
 #
@@ -319,6 +319,168 @@ hits = [x for x in a["findings"] if x["check"] == "filaments" and "completely co
 assert [x["part"] for x in hits] == ["mark"], hits
 print("hidden part ok")
 PY
+end
+
+step "print settings (set_print_settings, bed type, Bambu Studio project, print-notes facts)"
+S="${WORK}/settings"
+rm -rf "$S" && mkdir -p "$S"
+cat > "${S}/model.py" <<'PY'
+from build123d import Align, Box, Pos
+from p3d import LabeledModel
+
+BOT = (Align.CENTER, Align.CENTER, Align.MIN)
+m = LabeledModel("settings", title="Settings", lang="en")
+m.add_part("base", "Base", Box(40, 40, 10, align=BOT), print_group="base")
+m.add_part("post", "Post", Pos(70, 0, 0) * Box(10, 10, 40, align=BOT), print_group="hook")
+# a 30 x 30 mm arm sticking out from the top of the post with nothing under it: needs supports
+m.add_part("arm", "Arm", Pos(85, 0, 34) * Box(30, 30, 6, align=BOT), print_group="hook")
+m.set_print_orientation((0, 0, 0), bed_face="bottom")
+m.set_print_settings(walls=3, infill=20, layer_height=0.16, reason="sturdy enough to hang a bag")
+m.set_print_settings(group="hook", walls=5, infill=60, infill_pattern="gyroid", brim="ears", brim_width=4)
+m.build(__file__)
+PY
+echo '{"preset": "bambu-a1", "bed_type": "smooth_pei"}' > "${S}/printer.json"
+(cd "$S" && PYTHONPATH="$RT" "$PY" model.py) > /dev/null
+"$PY" -m p3d.print_settings "$S" > "${WORK}/print-settings.json"
+"$PY" - "${WORK}/print-settings.json" <<'PY'
+import json, sys
+r = json.load(open(sys.argv[1]))
+assert r["model"] == {"walls": 3, "infill": 20, "layer_height": 0.16} and r["reason"] == "sturdy enough to hang a bag", r
+assert r["pieces"]["hook"]["settings"] == {"walls": 5, "infill": 60, "layer_height": 0.16, "infill_pattern": "gyroid",
+                                            "brim": "ears", "brim_width": 4}, r["pieces"]["hook"]
+assert r["pieces"]["base"]["settings"] == r["model"] and r["pieces"]["base"]["support_findings"] == 0, r["pieces"]["base"]
+assert r["pieces"]["hook"]["support_findings"] > 0, r["pieces"]["hook"]
+assert any("Piece hook" in w and "without supports" in w for w in r["warnings"]), r["warnings"]
+assert r["bed_type"] == "smooth_pei" and r["bed_type_name"] == "High Temp Plate" and r["in_3mf"], r
+assert r["bambu"]["model"] == {"wall_loops": "3", "sparse_infill_density": "20%", "layer_height": "0.16"}, r["bambu"]
+PY
+"$PY" -m p3d.export "$S" > "${WORK}/export-settings.json"
+"$PY" - "${S}/out/final/settings.3mf" "${WORK}/export-settings.json" <<'PY'
+import json, re, sys, zipfile
+r = json.load(open(sys.argv[2]))
+assert r["format_check"]["ok"], r["format_check"]
+assert r["print_settings"]["bed_type_name"] == "High Temp Plate", r["print_settings"]
+assert any("without supports" in w for w in r["layout"]["warnings"]), r["layout"]["warnings"]
+z = zipfile.ZipFile(sys.argv[1])
+ps = json.loads(z.read("Metadata/project_settings.config"))
+assert ps["curr_bed_type"] == "High Temp Plate", ps["curr_bed_type"]
+assert (ps["wall_loops"], ps["sparse_infill_density"], ps["layer_height"]) == ("3", "20%", "0.16"), ps
+# Bambu Studio keeps a project value only when its key is listed as changed from the system process preset
+assert sorted(ps["different_settings_to_system"][0].split(";")) == ["layer_height", "sparse_infill_density", "wall_loops"]
+assert ps["different_settings_to_system"][1:] == ["", ""], ps["different_settings_to_system"]
+cfg = z.read("Metadata/model_settings.config").decode()
+objs = dict(re.findall(r'<object id="\d+">\s*<metadata key="name" value="([^"]+)"/>(.*?)</object>', cfg, re.S))
+assert set(objs) == {"base", "hook"}, objs
+hook = objs["hook"]
+for k, v in (("wall_loops", "5"), ("sparse_infill_density", "60%"), ("sparse_infill_pattern", "gyroid"),
+             ("brim_type", "brim_ears"), ("brim_width", "4")):
+    assert f'<metadata key="{k}" value="{v}"/>' in hook, (k, hook)
+assert 'key="layer_height"' not in cfg, "layer height stays model-wide"
+assert re.findall(r'key="(\w+)"', objs["base"].split("<part ")[0]) == ["extruder"], objs["base"]
+print("print settings in the Bambu Studio project ok")
+PY
+# the same settings for a printer without a Bambu Studio project: nothing in the 3MF, listed for the print notes
+echo '{"preset": "prusa-mk4"}' > "${S}/printer.json"
+"$PY" -m p3d.export "$S" > "${WORK}/export-settings-plain.json"
+"$PY" - "${WORK}/export-settings-plain.json" <<'PY'
+import json, sys
+r = json.load(open(sys.argv[1]))
+assert r["format_check"]["ok"] and not r["print_settings"]["in_3mf"] and r["print_settings"]["bed_type"] is None, r
+assert r["print_settings"]["model"]["walls"] == 3, r["print_settings"]
+PY
+# bad settings stop model.py with what is accepted
+"$PY" - <<'PY'
+from p3d.print_settings import bed_type, check_layer_height, normalize
+for bad, whole, words in (({"wals": 3}, True, "unknown print setting"), ({"layer_height": 0.2}, False, "whole model only"),
+                          ({"walls": 2.5}, True, "whole number"), ({"supports": "yes"}, True, "must be one of"),
+                          ({"infill": 120}, True, "number from 0 to 100")):
+    try:
+        normalize(bad, whole_model=whole)
+    except ValueError as e:
+        assert words in str(e), (bad, e)
+    else:
+        raise AssertionError(f"accepted {bad}")
+assert normalize({"supports": False, "brim": False, "infill": 15.0}) == {"supports": "none", "brim": "none", "infill": 15}
+assert bed_type({"preset": "bambu-a1-mini"}) == "textured_pei" and bed_type({"preset": "prusa-mk4"}) is None
+assert check_layer_height({"layer_height": 0.28}, 0.4) is None and "outside" in check_layer_height({"layer_height": 0.32}, 0.4)
+print("print setting checks ok")
+PY
+"$PY" -m p3d.printer --save "${WORK}/printer-bed" --preset bambu-p1s --bed-type cool --folder-only > /dev/null
+"$PY" -m p3d.printer "${WORK}/printer-bed/model" | grep -q '"bed_type": "cool"'
+end
+
+step "p3d.check3mf (every 3MF written above passes; one broken file per rule family fails)"
+"$PY" -m p3d.check3mf "${M}/out/final/phone-stand.3mf" "${M}/out/final/phone-stand_two.3mf" \
+    "${C}/out/final/multicolor.3mf" "${D}/out/final/same-label.3mf" "${S}/out/final/settings.3mf" > /dev/null
+"$PY" - "${M}/out/final/phone-stand.3mf" "${C}/out/final/multicolor.3mf" "${WORK}/broken" <<'PY'
+import json, re, sys, zipfile
+from pathlib import Path
+from p3d.check3mf import check_file
+
+bambu, plain, out = Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3])
+out.mkdir(exist_ok=True)
+assert check_file(bambu)["kind"] == "bambu_project" and check_file(plain)["kind"] == "3mf"
+
+def broken(src, name, change):
+    """A copy of src with change(filename, text) -> text | None (None drops the file)."""
+    dst = out / f"{name}.3mf"
+    with zipfile.ZipFile(src) as zi, zipfile.ZipFile(dst, "w", zipfile.ZIP_DEFLATED) as zo:
+        for f in zi.namelist():
+            t = zi.read(f).decode("utf-8")
+            t = change(f, t)
+            if t is not None:
+                zo.writestr(f, t)
+    return check_file(dst)
+
+def edit_ps(fn):
+    def change(f, t):
+        if f != "Metadata/project_settings.config":
+            return t
+        ps = json.loads(t); fn(ps); return json.dumps(ps)
+    return change
+
+def only(f0, fn):
+    return lambda f, t: fn(t) if f == f0 else t
+
+MODEL, CFG = "3D/3dmodel.model", "Metadata/model_settings.config"
+cases = {
+    "no-project-settings": (bambu, lambda f, t: None if f == "Metadata/project_settings.config" else t,
+                            "missing Metadata/project_settings.config"),
+    "unlisted-key": (bambu, edit_ps(lambda ps: ps.update(wall_loops="4")), "without listing it"),
+    "listed-without-value": (bambu, edit_ps(lambda ps: ps["different_settings_to_system"].__setitem__(0, "wall_loops")),
+                             "has no value for it"),
+    "bad-value": (bambu, edit_ps(lambda ps: ps.update(sparse_infill_density="lots", different_settings_to_system=
+                                                      ["sparse_infill_density"] + ps["different_settings_to_system"][1:])),
+                  "sparse_infill_density"),
+    "non-string-value": (bambu, edit_ps(lambda ps: ps.update(nozzle_diameter=[0.4])), "string"),
+    "bad-bed-type": (bambu, edit_ps(lambda ps: ps.update(curr_bed_type="Glass Plate")), "is not a bed type"),
+    "wrong-array-length": (bambu, edit_ps(lambda ps: ps["inherits_group"].append("")), "entries, not"),
+    "empty-colour": (bambu, edit_ps(lambda ps: ps.update(filament_colour=[])), "filament_colour is empty"),
+    "bad-extruder": (bambu, only(CFG, lambda t: t.replace('key="extruder" value="1"', 'key="extruder" value="7"', 1)),
+                     "is not one of"),
+    "unknown-object-key": (bambu, only(CFG, lambda t: t.replace('<metadata key="extruder"',
+                                                                 '<metadata key="layer_height" value="0.1"/><metadata key="extruder"', 1)),
+                           "unknown per-object setting"),
+    "bad-object-value": (bambu, only(CFG, lambda t: t.replace('<metadata key="extruder"',
+                                                               '<metadata key="brim_type" value="huge"/><metadata key="extruder"', 1)),
+                         "brim_type"),
+    "object-off-plate": (bambu, only(CFG, lambda t: re.sub(r"<model_instance>.*?</model_instance>", "", t, count=1, flags=re.S)),
+                         "plates, not one"),
+    "missing-object": (bambu, only(MODEL, lambda t: re.sub(r'(<item objectid=")\d+', r"\g<1>999", t, count=1)),
+                       "does not exist"),
+    "bad-triangle": (plain, lambda f, t: re.sub(r'v1="\d+"', 'v1="999999"', t, count=1) if f.endswith(".model") else t,
+                     "past its"),
+    "empty-build": (plain, only(MODEL, lambda t: re.sub(r"<item [^>]*/>", "", t)), "the build has no items"),
+    "bad-unit": (plain, only(MODEL, lambda t: t.replace('unit="millimeter"', 'unit="inch"', 1)), "not millimeter"),
+}
+for name, (src, change, words) in cases.items():
+    r = broken(src, name, change)
+    assert not r["ok"] and any(words in e for e in r["errors"]), (name, r)
+print(f"check3mf ok: {len(cases)} broken files caught")
+PY
+if "$PY" -m p3d.check3mf "${WORK}/broken/bad-value.3mf" > /dev/null; then
+    echo "::error::check3mf exited 0 on a broken file"; exit 1
+fi
 end
 
 echo

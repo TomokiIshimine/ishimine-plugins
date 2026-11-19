@@ -4,7 +4,7 @@ English | [日本語](README.ja.md)
 
 Tell Claude what you want to make with your 3D printer, and it designs the model with you through conversation.
 **No Blender or other modeling software needed**, and nothing new to learn: you just describe what you want.
-Claude asks about size and shape, writes the model in Python (build123d), has it checked by two independent reviewers, and shows it to you in a 3D viewer.
+Claude asks about size and shape, writes the model in Python (build123d), has it checked by three independent reviewers, and shows it to you in a 3D viewer.
 When you are happy with it, you get **3MF / STL files placed in print orientation**. Open them in your slicer and print them on a printer such as the Bambu Lab A1 mini.
 
 Built for Cowork in the Claude app (desktop and phone). It also works in Claude Code. It does not support the chat screen on claude.ai (web, desktop, mobile) (see [Where it works](#where-it-works)).
@@ -16,9 +16,9 @@ Built for Cowork in the Claude app (desktop and phone). It also works in Claude 
 - **Asks before it builds.** Claude asks multiple-choice questions about purpose, size, shape, how parts fit together and your printer, and writes the answers down as numbered requirements (R1, R2…).
 - **Designs in named parts.** The model is split into parts such as "Roof", "Chimney" or "Windows", so you and Claude can refer to them by name.
 - **Checks printability with real measurements.** Watertightness, wall thickness, overhangs, bridges, bed contact and build volume are measured automatically after every build.
-- **Gets a second opinion.** Two read-only subagents review the model in parallel: one checks whether it will print, the other whether it meets your requirements. Claude fixes what they find, up to 3 rounds, before showing you anything.
+- **Gets a second opinion.** Three read-only subagents review the model in parallel: one checks whether it will print, one whether it meets your requirements, and one whether the print settings (supports, brim, walls, infill, layer height) suit it. Claude fixes what they find, up to 3 rounds, before showing you anything.
 - **Lets you see it in 3D.** A single-file HTML viewer shows the model with part names and directions, so you can say "make the roof 5 mm higher" or "move the chimney to the left".
-- **Exports print-ready files.** 3MF / STL in print orientation, plus print notes with recommended settings and whether supports are needed.
+- **Exports print-ready files.** 3MF / STL in print orientation, plus print notes with the settings and whether supports are needed. With a Bambu Lab printer the settings are already in the 3MF. See [Print settings](#print-settings).
 - **Prints in several colors when you want it.** Say which parts get which color (for example "white body, black letters") and the 3MF opens with the colors already assigned. One-color models work exactly as before. See [Multi-color printing](#multi-color-printing).
 
 ## Install
@@ -65,7 +65,7 @@ Start a conversation with a request like one of these. Claude asks follow-up que
 | 1. Hearing | Claude asks about purpose, size, shape, fit and your printer | Pick from the options, or answer in your own words |
 | 2. Design | The model is split into named parts, and dimensions and print orientation are decided | Confirm the key points |
 | 3. Build | Claude writes `model.py` and runs it, fixing obvious failures using the automatic measurements | Nothing |
-| 4. Review | Two independent reviewers check printability and requirements (up to 3 rounds of fixes) | Nothing |
+| 4. Review | Three independent reviewers check printability, requirements and print settings (up to 3 rounds of fixes) | Nothing |
 | 5. Your check | The 3D viewer opens | Look around and give changes in chat, using part names and directions |
 | 6. Export | 3MF / STL in print orientation and print notes are written | Slice and print |
 
@@ -107,7 +107,7 @@ The viewer UI is available in English and Japanese.
 | "I want to 3D print a phone stand" / `/print3d-modeler:model phone stand` | model | Entry point for a new model. Runs everything from hearing to export |
 | "Continue the model from earlier" / `/print3d-modeler:resume` | resume | Resumes an unfinished model from the step where it stopped |
 | "Show it in 3D" / `/print3d-modeler:view` | view | Rebuilds and opens the 3D viewer |
-| "Review it again" / `/print3d-modeler:review` | review | Reruns only the printability and requirements reviews |
+| "Review it again" / `/print3d-modeler:review` | review | Reruns only the printability, requirements and print-settings reviews |
 | "Export the STL" / `/print3d-modeler:export` | export | Writes 3MF / STL in print orientation plus print notes |
 | "My printer is an A1 mini" / `/print3d-modeler:printer` | printer | Sets and remembers your printer (build volume, nozzle size, material) |
 | "How do I use this?" / `/print3d-modeler:help` | help | Explains the commands, the workflow and how to get started, and lists your models in progress |
@@ -119,6 +119,15 @@ The viewer UI is available in English and Japanese.
 - The build volume defaults to 220×220×250 mm. Presets cover the main Bambu Lab printers (A1 mini, A1, P1P, P1S, P2S, X1 Carbon, X1E, X2D, H2S, H2D, H2D Pro, H2C, H3C; volumes from Bambu Lab's spec pages) and other popular printers (Prusa MK4 / CORE One / MINI+, Creality Ender-3 V3 / K1, and others). Any value can be overridden.
 - Tell Claude your printer once: it is saved in `print3d/printer.json` and remembered for your next models (in the plugin's data folder, and in Claude's memory where the app has one).
 - Pieces are laid out on your printer's bed for printing: each keeps the face that goes down and is turned about Z at any angle (5° steps), and their real outlines are packed (the whole piece seen from above, not just the face on the bed, so parts that overhang never run into each other), so L shapes nest into each other and small pieces fill the gaps, onto as few plates as possible. If they need more than one plate, Claude tells you; with a Bambu Lab printer the 3MF is a Bambu Studio project that holds every plate (open it in Bambu Studio or OrcaSlicer and each piece is on its plate, with your printer selected), and with other printers you get one 3MF per plate; if a piece does not fit your printer at all, Claude warns you and suggests splitting or scaling it.
+
+## Print settings
+
+Claude chooses the slicer settings the model needs from your requirements and the measurements, and an independent reviewer checks them. Anything not chosen stays as your slicer's preset has it.
+
+- **What is set.** Supports (none, normal or tree; from the bed only), brim, walls, top and bottom layers, infill and its pattern, and layer height. For the whole model, or for one piece only (for example tree supports and 4 walls on the hook, nothing on the base).
+- **Already in the 3MF on Bambu Lab printers.** Opening it selects the usual process preset marked as modified, with these values; pieces with their own settings show them on the object. The build plate is set too: the textured PEI plate unless you tell Claude you use another one (without it, Bambu Studio would open the project on the cool plate).
+- **Other printers.** A plain 3MF has no place for slicer settings, so they are in the print notes for you to set.
+- **Checked file format.** Every 3MF is checked before it is handed over: package structure, meshes, and for Bambu Studio projects the presets, plates, filaments and every setting value, so a broken file is caught instead of opening wrong. CI runs the same check on sample models.
 
 ## Multi-color printing
 
@@ -149,7 +158,7 @@ print3d/
     ├── viewer.html      the 3D viewer
     ├── reviews/         results of each review round
     ├── history.md       progress log, used by resume
-    ├── print-notes.md   recommended settings and support advice
+    ├── print-notes.md   print settings and support advice
     └── out/final/       3MF / STL to print
 ```
 
@@ -175,7 +184,7 @@ print3d-modeler/
 ├── .claude-plugin/plugin.json
 ├── skills/            model, resume, view, review, export, printer, help (user-facing)
 │                      printability-rules, modeling-conventions (internal rules and conventions)
-├── agents/            printability-reviewer, requirements-reviewer (read-only reviewers)
+├── agents/            printability-reviewer, requirements-reviewer, print-settings-reviewer (read-only reviewers)
 └── runtime/           setup_env.sh, requirements.txt, p3d/ (Python library), viewer/ (template and three.js)
 ```
 
