@@ -54,7 +54,7 @@ OBJECT_KEYS = {"name", "extruder", "module"}            # object metadata that i
 BED_TYPES = ("Default Plate", "Cool Plate", "Engineering Plate", "High Temp Plate", "Textured PEI Plate",
              "Supertack Plate")
 PROJECT_REQUIRED = ("printer_settings_id", "print_settings_id", "filament_settings_id", "filament_colour",
-                    "inherits_group", "different_settings_to_system")
+                    "inherits_group", "different_settings_to_system", "curr_bed_type")
 
 
 def _value_error(key: str, value: str) -> str | None:
@@ -179,7 +179,8 @@ def _check_project(z: zipfile.ZipFile, root: ET.Element, errors: list) -> None:
         return
     for k in PROJECT_REQUIRED:
         if k not in ps:
-            errors.append(f"project_settings.config has no {k}")
+            errors.append(f"project_settings.config has no {k}"
+                          + (" (Bambu Studio would open the project on the Cool Plate)" if k == "curr_bed_type" else ""))
     for k, v in ps.items():
         if not (isinstance(v, str) or (isinstance(v, list) and all(isinstance(x, str) for x in v))):
             errors.append(f"project_settings.config: {k} must be a string or a list of strings "

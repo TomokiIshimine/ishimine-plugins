@@ -454,6 +454,7 @@ cases = {
                   "sparse_infill_density"),
     "non-string-value": (bambu, edit_ps(lambda ps: ps.update(nozzle_diameter=[0.4])), "string"),
     "bad-bed-type": (bambu, edit_ps(lambda ps: ps.update(curr_bed_type="Glass Plate")), "is not a bed type"),
+    "no-bed-type": (bambu, edit_ps(lambda ps: ps.pop("curr_bed_type")), "has no curr_bed_type"),
     "wrong-array-length": (bambu, edit_ps(lambda ps: ps["inherits_group"].append("")), "entries, not"),
     "empty-colour": (bambu, edit_ps(lambda ps: ps.update(filament_colour=[])), "filament_colour is empty"),
     "bad-extruder": (bambu, only(CFG, lambda t: t.replace('key="extruder" value="1"', 'key="extruder" value="7"', 1)),

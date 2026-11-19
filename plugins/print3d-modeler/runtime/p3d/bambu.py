@@ -27,8 +27,9 @@ Preset names follow resources/profiles/BBL in the BambuStudio repository (profil
 
 Print settings (p3d.print_settings): model-wide values go into project_settings.config with their keys listed in
 different_settings_to_system[0], which is what makes Bambu Studio keep them over the system process preset; a piece's
-own values go on its <object> in model_settings.config. curr_bed_type is always written for a known bed type: without
-it Bambu Studio opens the project on the Cool Plate.
+own values go on its <object> in model_settings.config. curr_bed_type is always written (the Textured PEI Plate, every
+Bambu Lab printer's own default, unless project["bed_type"] names another): without it Bambu Studio opens the project
+on the Cool Plate.
 
 Multi-color: one object per printed piece, holding one part (volume) per filament with that filament's number as its
 `extruder`; filament_settings_id and filament_colour list the project's filaments 1..N (inherits_group and
@@ -47,6 +48,7 @@ from pathlib import Path
 import numpy as np
 
 from .bambu_filaments import FILAMENT_PRESETS
+from .print_settings import BED_TYPES, DEFAULT_BAMBU_BED
 
 PLATE_GAP = 1 / 5                       # Bambu Studio LOGICAL_PART_PLATE_GAP
 APPLICATION = "BambuStudio-02.00.00.00"  # oldest version with today's project layout; newer apps open it without a warning
@@ -237,7 +239,7 @@ def write_project(path: str | Path, plates: list[list[tuple]], project: dict, ti
     (multi-color: one volume per filament), or (name, mesh, volumes, settings) with the piece's own Bambu Studio
     settings {key: string value}. Names need not be unique. project["filaments"], when present, lists the
     project's filaments [{"preset", "color"}, ...]; project["process_settings"] holds model-wide Bambu Studio process
-    settings {key: string value} and project["bed_type"] the curr_bed_type name. Returns where each piece went, in
+    settings {key: string value} and project["bed_type"] the curr_bed_type name (default: Textured PEI Plate). Returns where each piece went, in
     input order:
     [{"name", "plate", "plate_origin_mm", "position_mm"}].
     """
@@ -328,8 +330,7 @@ def write_project(path: str | Path, plates: list[list[tuple]], project: dict, ti
         "different_settings_to_system": [";".join(process)] + [""] * (len(filaments) + 1),
         **process,
     }
-    if project.get("bed_type"):
-        ps["curr_bed_type"] = project["bed_type"]
+    ps["curr_bed_type"] = project.get("bed_type") or BED_TYPES[DEFAULT_BAMBU_BED]
     files["Metadata/project_settings.config"] = json.dumps(ps, indent=4) + "\n"
 
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
