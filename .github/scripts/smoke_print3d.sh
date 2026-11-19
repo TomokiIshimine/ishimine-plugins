@@ -379,6 +379,44 @@ assert 'key="layer_height"' not in cfg, "layer height stays model-wide"
 assert re.findall(r'key="(\w+)"', objs["base"].split("<part ")[0]) == ["extruder"], objs["base"]
 print("print settings in the Bambu Studio project ok")
 PY
+"$PY" - "$S" <<'PY'
+import json, sys
+from pathlib import Path
+a = json.loads((Path(sys.argv[1]) / "analysis.json").read_text(encoding="utf-8"))
+assert a["printer"]["layer_height_mm"] == 0.16, "the analysis counts the model's own layer height"
+PY
+# a 0.5 mm color layer is 2 layers at the printer's 0.2 mm but not at the model's 0.3 mm: the analysis must say so
+L="${WORK}/layers"
+rm -rf "$L" && mkdir -p "$L"
+cat > "${L}/model.py" <<'PY'
+import sys
+from build123d import Align, Box, Pos
+from p3d import LabeledModel
+
+BOT = (Align.CENTER, Align.CENTER, Align.MIN)
+m = LabeledModel("layers", title="Layers", lang="en")
+m.add_filament("white", color="#F2F2F2", material="PLA")
+m.add_filament("black", color="#1A1A1A", material="PLA")
+m.add_part("plate", "Plate", Box(40, 20, 4, align=BOT), filament="white")
+m.add_part("top", "Top", Pos(0, 0, 4) * Box(20, 10, 0.5, align=BOT), filament="black")
+m.set_print_orientation((0, 0, 0), bed_face="bottom")
+if len(sys.argv) > 1:
+    m.set_print_settings(layer_height=float(sys.argv[1]))
+m.build(__file__)
+PY
+echo '{"preset": "bambu-a1"}' > "${L}/printer.json"
+for lh in "" 0.3; do
+    # shellcheck disable=SC2086
+    (cd "$L" && PYTHONPATH="$RT" "$PY" model.py $lh) > /dev/null
+    "$PY" - "$L" "$lh" <<'PY'
+import json, sys
+from pathlib import Path
+a = json.loads((Path(sys.argv[1]) / "analysis.json").read_text(encoding="utf-8"))
+thin = [x for x in a["findings"] if x["check"] == "filaments" and "under 2 layers" in x["issue"]]
+assert bool(thin) == bool(sys.argv[2]), (sys.argv[2], thin)
+PY
+done
+echo "model layer height in the analysis ok"
 # the same settings for a printer without a Bambu Studio project: nothing in the 3MF, listed for the print notes
 echo '{"preset": "prusa-mk4"}' > "${S}/printer.json"
 "$PY" -m p3d.export "$S" > "${WORK}/export-settings-plain.json"

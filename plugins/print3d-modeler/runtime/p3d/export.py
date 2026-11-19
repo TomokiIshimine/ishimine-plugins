@@ -147,7 +147,7 @@ def export_dir(d: str | Path, materials: dict | None = None) -> dict:
     """Write out/final/. materials: {filament id: material} decided at export time (overrides model.py)."""
     d = Path(d)
     pj = read_json(d / PARTS_JSON)
-    printer = load_printer(d)
+    printer = ps.with_layer_height(load_printer(d), pj)
     fin = d / "out" / "final"
     fin.mkdir(parents=True, exist_ok=True)
     for old in fin.glob("*"):

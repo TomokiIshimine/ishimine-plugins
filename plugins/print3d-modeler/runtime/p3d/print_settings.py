@@ -137,6 +137,13 @@ def bed_type(printer: dict) -> str | None:
     return v
 
 
+def with_layer_height(printer: dict, pj: dict) -> dict:
+    """The printer settings with layer_height_mm taken from the model's own layer_height when model.py sets one, so
+    the analysis (color regions at least two layers thick, filament changes) counts the layers that will print."""
+    lh = ((pj.get("print_settings") or {}).get("model") or {}).get("layer_height")
+    return {**printer, "layer_height_mm": float(lh)} if lh is not None else printer
+
+
 def check_layer_height(settings: dict, nozzle_mm: float) -> str | None:
     """A problem with the model-wide layer height for this nozzle, or None (FDM rule of thumb: 25-75 % of it)."""
     lh = settings.get("layer_height")
