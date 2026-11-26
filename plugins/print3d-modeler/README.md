@@ -88,7 +88,7 @@ Also: the viewer is one self-contained HTML file (`viewer.html` in the model's f
 - Show, hide or make parts transparent, one by one or per printed object.
 - Switch between the model **as used** and in **print orientation**.
 - Highlight **faces likely to need support** (red) and **faces touching the bed** (blue), judged in print orientation.
-- Show a Ø20 mm coin for scale.
+- Show a Ø20 mm coin for scale in the as-used view. It is never placed on the print plates and never affects how pieces are packed or what is exported.
 
 For multi-color models, a **part colors / filament colors** switch appears in the toolbar: filament colors show each part in the color it will print in, with a legend of the filaments.
 

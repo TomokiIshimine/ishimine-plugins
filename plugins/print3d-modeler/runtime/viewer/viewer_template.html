@@ -594,7 +594,7 @@ function buildBed(mode, box) {
     plate.position.set(x, cy, -0.05);
     bed.add(plate, bedGrid(w, d, x, cy, 10, cssv("--grid-minor"), .6), bedGrid(w, d, x, cy, 50, cssv("--grid-major"), .7));
   }
-  coin.position.set(Math.max(box.min.x - 18, cx - w / 2 + 12), Math.max(box.min.y - 18, cy - d / 2 + 12), 0);
+  if (mode !== "print") coin.position.set(Math.max(box.min.x - 18, cx - w / 2 + 12), Math.max(box.min.y - 18, cy - d / 2 + 12), 0);
 }
 // Grid lines every `step` mm across the bed, counted from the bed center (10 mm minor, 50 mm major)
 function bedGrid(w, d, cx, cy, step, color, opacity) {
@@ -865,7 +865,9 @@ function applyVisibility() {
   M.parts.forEach((p, i) => { groupOn[p.group] = groupOn[p.group] || shown[i]; });
   overGroup.visible = $("tgOver").checked; contactGroup.visible = $("tgContact").checked;
   overlayMeshes.forEach((m) => { m.visible = !!groupOn[m.userData.group]; });
-  coin.visible = coinLabel.visible = $("tgCoin").checked;
+  // The coin is a viewing aid for the as-used pose only: it is never on the print plates (packing and export never see it)
+  const coinOn = $("tgCoin").checked && mode === "design";
+  coin.visible = coinLabel.visible = coinOn;
 }
 for (const id of ["tgLabels", "tgDirs", "tgOver", "tgContact", "tgCoin"]) $(id).addEventListener("change", applyVisibility);
 

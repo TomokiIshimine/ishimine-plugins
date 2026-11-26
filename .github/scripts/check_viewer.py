@@ -5,7 +5,8 @@
 For each file: no page errors or console errors, the viewer reaches window.__ready, the UI language
 is the expected one, the title and every part from the embedded model are shown, the
 "failed to start" message stays hidden, and multi-color models (and only they) have a working
-part colors / filament colors switch. A screenshot is saved next to each file (<name>.png).
+part colors / filament colors switch, and the size-reference coin shows in the as-used view only
+(never in print orientation). A screenshot is saved next to each file (<name>.png).
 Set CHROMIUM_PATH to use an already installed Chromium instead of Playwright's own.
 """
 from __future__ import annotations
@@ -60,12 +61,40 @@ def check(page, html: Path, lang: str) -> list[str]:
             page.locator('[data-color="parts"]').click()
     elif switch.count():
         problems.append("one-color model shows the filament colors switch")
+    problems += check_coin(page)
     if state["errShown"]:
         problems.append("the 'viewer failed to start' message is shown")
     if not state["canvas"]:
         problems.append("no WebGL canvas in #view")
     page.screenshot(path=str(html.with_suffix(".png")))
     print(f"{html.name} [{lang}]: {len(state['parts'])} parts, title {state['title']!r}")
+    return problems
+
+
+def check_coin(page) -> list[str]:
+    """The size-reference coin shows in the as-used view and never in print orientation, even with its switch on."""
+    problems: list[str] = []
+    coin_shown = """() => { const c = document.querySelector('#labels .coin');
+        return !!c && getComputedStyle(c).display !== 'none'; }"""
+    set_switch = """(on) => { const t = document.getElementById('tgCoin');
+        t.checked = on; t.dispatchEvent(new Event('change')); }"""
+
+    def shown_after(action) -> bool:
+        action()
+        page.wait_for_timeout(200)        # let a frame render (CSS2DRenderer sets the label's display)
+        return page.evaluate(coin_shown)
+
+    if not shown_after(lambda: None):
+        problems.append("size-reference coin is not shown in the as-used view")
+    if shown_after(lambda: page.locator('[data-mode="print"]').click()):
+        problems.append("size-reference coin is shown in print orientation")
+    if shown_after(lambda: page.evaluate(set_switch, True)):
+        problems.append("size-reference coin is shown in print orientation after switching it on")
+    if not shown_after(lambda: page.locator('[data-mode="design"]').click()):
+        problems.append("size-reference coin does not come back in the as-used view")
+    if shown_after(lambda: page.evaluate(set_switch, False)):
+        problems.append("size-reference coin is shown with its switch off")
+    page.evaluate(set_switch, True)
     return problems
 
 

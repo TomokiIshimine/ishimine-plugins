@@ -70,6 +70,7 @@ Several files read each other's output. A change to one side without the other b
 - Data embedded into the HTML must stay escaped: `viewer.py` replaces `</` in the model JSON and `</script` in the bundle. Flag removal of that escaping or new injection points that skip it, because part labels and descriptions are free text.
 - Every UI string goes through the `P3D_I18N` table and must exist in both `en` and `ja`. Flag hard-coded UI text, or a key added to only one language.
 - Turning the direction display off hides both the arrows and their labels; the 3D view is on the left and the side panel (closed by default) on the right. Flag changes that break these.
+- The size-reference coin (Ø20 mm) is a viewer-only aid shown in the as-used view, never in print orientation, and nothing in `p3d/` (packing, analysis, export) knows about it. Flag code that shows it on the print plates or passes it to the runtime.
 
 ### Runtime code
 

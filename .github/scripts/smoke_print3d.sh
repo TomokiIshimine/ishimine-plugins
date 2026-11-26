@@ -83,6 +83,32 @@ step "p3d.export"
 end
 need out/final/phone-stand.3mf out/final/phone-stand_main.stl
 
+step "size-reference coin stays out of packing and export"
+# The coin exists only in the viewer's as-used view (viewer_template.html builds it in JS). The runtime that
+# packs plates and writes files has no notion of it, and packing and export see only the model's print groups.
+if grep -rniE "coin|1円玉|一円玉" "${RT}/p3d" > /dev/null; then
+  echo "::error::the packing/export runtime (p3d/) mentions the size-reference coin"; exit 1
+fi
+"$PY" - "$M" <<'PY'
+import json, re, sys, zipfile
+from pathlib import Path
+m = Path(sys.argv[1])
+pj = json.load(open(m / "parts.json", encoding="utf-8"))
+# packing and export lay out exactly the model's parts: one piece made of the four parts, nothing else
+groups = pj["print_orientation"]["groups"]
+assert list(groups) == ["main"], f"unexpected pieces on the plates: {list(groups)}"
+assert sorted(groups["main"]["parts"]) == sorted(p["id"] for p in pj["parts"]) == ["backrest", "base", "front_lip", "rib"], groups
+for f in ("parts.json", "analysis.json"):
+    assert not re.search(r"coin|1円玉|一円玉", (m / f).read_text(encoding="utf-8"), re.I), f"{f} mentions the coin"
+names = sorted(p.name for p in (m / "out" / "final").iterdir())
+assert names == ["phone-stand.3mf", "phone-stand_main.stl"], names
+with zipfile.ZipFile(m / "out" / "final" / "phone-stand.3mf") as z:
+    text = "".join(z.read(n).decode("utf-8", "replace") for n in z.namelist() if n.endswith((".model", ".config", ".rels")))
+assert not re.search(r"coin|1円玉|一円玉", text, re.I), "the 3MF mentions the coin"
+print("coin stays out ok")
+PY
+end
+
 step "p3d.layout (concave pieces nest on one plate)"
 "$PY" - <<'PY'
 import itertools
