@@ -361,9 +361,8 @@ def _free_spot(mesh, turn: float, X: float, Y: float, exclude):
 
 def bed_exclude(printer: dict) -> list[list[float]]:
     """Areas of the bed the printer keeps free (printer.json bed_exclude_mm: [x0, y0, x1, y1] rectangles in mm,
-    front-left corner of the build volume at 0, 0). The area both nozzles of a two-nozzle printer reach has none."""
-    if printer.get("nozzle_mode") == "dual":
-        return []
+    front-left corner of the build volume at 0, 0). No two-nozzle preset has any, but one set in printer.json applies
+    in either nozzle mode."""
     return [[float(v) for v in r] for r in printer.get("bed_exclude_mm") or []]
 
 

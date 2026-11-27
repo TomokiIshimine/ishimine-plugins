@@ -221,6 +221,8 @@ x1c, a1 = resolve({"preset": "bambu-x1c"}), resolve({"preset": "bambu-a1"})
 assert bed_exclude(x1c) == [[0.0, 0.0, 18.0, 28.0]] and bed_exclude(a1) == [], (bed_exclude(x1c), bed_exclude(a1))
 old = {"bed_mm": [256, 256, 256], "spacing_mm": 6}
 assert not is_current(old, x1c) and is_current(old, a1)
+h2d = resolve({"preset": "bambu-h2d", "nozzle_mode": "dual", "bed_exclude_mm": [[140, 150, 160, 170]]})
+assert bed_exclude(h2d) == [[140.0, 150.0, 160.0, 170.0]], bed_exclude(h2d)
 print("edge margin ok", r["edge_margin_mm"])
 PY
 end
