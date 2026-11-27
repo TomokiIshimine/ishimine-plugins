@@ -25,7 +25,7 @@ import trimesh
 from .bambu import max_filaments
 from .filament import normalize_material, used_filaments
 from .files import ANALYSIS_JSON, load_dir, load_mesh, print_filament_stl, print_stl, write_json
-from .layout import DIAGONAL, fits_bed, is_current
+from .layout import BLOCKED, DIAGONAL, EDGE_MARGINS_MM, bed_exclude, fits_bed, is_current
 from .meshutil import boolean, direction_label, fuse, np_default, place_on_bed, round_list, transformed
 from .print_settings import with_layer_height
 from .printer import load_printer
@@ -441,8 +441,9 @@ def _check_layout(pj: dict, lim: Limits, f: Findings) -> dict:
                     if lay else "no printer")
         f.add("major", f"The print layout was made for {made_for}, not for the current printer {name} "
               f"{'×'.join(f'{v:g}' for v in vol)} mm, {float(lim.printer['part_spacing_mm']):g} mm apart", check="layout",
-              evidence=f"parts.json print_layout={lay and [lay['bed_mm'], lay['spacing_mm']]}, "
-                       f"printer={[vol, lim.printer['part_spacing_mm']]}",
+              evidence=f"parts.json print_layout={lay and [lay['bed_mm'], lay['spacing_mm'], lay.get('exclude_mm', [])]}, "
+                       f"printer={[vol, lim.printer['part_spacing_mm'], bed_exclude(lim.printer)]} "
+                       "(bed, part spacing, areas kept free)",
               suggestion="Run model.py again so the pieces are laid out on the current printer's bed")
         return {"plates": None, "stale": True}
     if lay["plates"] > 1:
@@ -453,12 +454,26 @@ def _check_layout(pj: dict, lim: Limits, f: Findings) -> dict:
               f"they need {lay['plates']} print runs", check="layout",
               evidence="; ".join(f"plate {k}: {', '.join(v)}" for k, v in sorted(per.items())),
               suggestion="Tell the user. Export writes one 3MF per plate. Scale down or split pieces if one run is required")
+    margin = lay.get("edge_margin_mm")
+    if margin is not None and float(margin) < EDGE_MARGINS_MM[1]:
+        f.add("info", f"The plate is crowded: to fit on {lay['plates']} plate(s) the pieces come within "
+              f"{float(margin):g} mm of the bed's edge (15 mm when there is room)", check="layout",
+              evidence=f"parts.json print_layout.edge_margin_mm={float(margin):g}",
+              suggestion="Fine for small PLA pieces. Near the edge the bed runs cooler and a brim has little room, so "
+                         "for large flat pieces or warp-prone materials (ABS, ASA, PETG) mention it in the print notes")
     for g, gi in groups.items():
+        if gi.get("bed_fit") == BLOCKED:
+            f.add("major", f"[{g}] Fits the bed of {name} only over an area the printer keeps free "
+                  f"(such as the front-left corner): it cannot be placed", check="layout",
+                  evidence=f"footprint {gi['size_mm'][0]}×{gi['size_mm'][1]} mm, areas kept free "
+                           f"{lay.get('exclude_mm', [])} on a {vol[0]:g}×{vol[1]:g} mm bed",
+                  suggestion="Scale the piece down or split it so it clears the area kept free")
         if gi.get("bed_fit") == DIAGONAL:
             f.add("info", f"[{g}] Fits the bed only when turned {gi['bed_turn_deg']:g}° about Z (diagonally); "
                   "the layout and the exported files are already turned", check="layout",
                   evidence=f"footprint {gi['size_mm'][0]}×{gi['size_mm'][1]} mm on a {vol[0]:g}×{vol[1]:g} mm bed")
     return {"plates": lay["plates"], "stale": False, "printer": lay["printer"], "bed_mm": lay["bed_mm"],
+            "edge_margin_mm": margin, "exclude_mm": lay.get("exclude_mm", []),
             "pieces": {g: {"plate": gi["plate"], "bed_turn_deg": gi["bed_turn_deg"], "bed_fit": gi["bed_fit"]}
                        for g, gi in groups.items()}}
 

@@ -49,7 +49,9 @@ so also keep the printer in your own memory if you have one (see step 5).
    only for this folder (for example a second printer used for one project). For one model only, write
    `print3d/<model>/printer.json` with the Write tool in the same JSON shape (`{"preset": "<key>", ...}`).
    Other keys that can be set in printer.json: `layer_height_mm` `overhang_limit_deg` `max_bridge_mm` `clearance_mm`
-   `min_bed_contact_mm2` `part_spacing_mm` `build_volume_mm` `bed_type`.
+   `min_bed_contact_mm2` `part_spacing_mm` `build_volume_mm` `bed_type` `bed_exclude_mm` (areas of the bed no piece may
+   cover, `[[x0, y0, x1, y1], ...]` in mm from the front-left corner; the X1 and P1 presets already keep their
+   front-left corner free).
    Bed type (`--bed-type`): `textured_pei` (Bambu Lab default), `smooth_pei`, `cool`, `engineering`, `supertack`. Set it
    only when the user says they use another plate; it goes into the Bambu Studio project and decides the bed temperature.
 5. If you have a persistent memory (a memory tool, memory files, or project memory), save one line there too, in the

@@ -51,22 +51,29 @@ DEFAULT = {
 }
 
 OVERRIDABLE = ("build_volume_mm", "nozzle_mm", "layer_height_mm", "material", "overhang_limit_deg",
-               "max_bridge_mm", "clearance_mm", "min_bed_contact_mm2", "part_spacing_mm", "nozzle_mode", "bed_type")
+               "max_bridge_mm", "clearance_mm", "min_bed_contact_mm2", "part_spacing_mm", "nozzle_mode", "bed_type",
+               "bed_exclude_mm")
 
 # build_volume_mm is [X (left-right), Y (front-back), Z (height)] in mm.
 # Bambu Lab figures were checked against bambulab.com spec pages in November 2026. For two-nozzle printers,
 # build_volume_mm is the single-nozzle printing area (the left nozzle on the H2C) and dual_nozzle_volume_mm the
-# area both nozzles reach (used with "nozzle_mode": "dual"). Other brands are approximate manufacturer figures.
+# area both nozzles reach (used with "nozzle_mode": "dual"). bed_exclude_mm lists the areas the printer keeps free
+# ([x0, y0, x1, y1] mm from the front-left corner), from bed_exclude_area in the printer profiles of
+# BambuStudio resources/profiles/BBL; the layout never puts a piece there. Other brands are approximate
+# manufacturer figures.
 PRESETS = {
     "generic-220": {"name": "Generic FDM 220×220×250", "brand": "Generic", "build_volume_mm": [220, 220, 250]},
     "bambu-a1-mini": {"name": "Bambu Lab A1 mini", "brand": "Bambu Lab", "build_volume_mm": [180, 180, 180]},
     "bambu-a1": {"name": "Bambu Lab A1", "brand": "Bambu Lab", "build_volume_mm": [256, 256, 256]},
-    "bambu-p1p": {"name": "Bambu Lab P1P", "brand": "Bambu Lab", "build_volume_mm": [256, 256, 256]},
-    "bambu-p1s": {"name": "Bambu Lab P1S", "brand": "Bambu Lab", "build_volume_mm": [256, 256, 256]},
+    "bambu-p1p": {"name": "Bambu Lab P1P", "brand": "Bambu Lab", "build_volume_mm": [256, 256, 256],
+                  "bed_exclude_mm": [[0, 0, 18, 28]]},
+    "bambu-p1s": {"name": "Bambu Lab P1S", "brand": "Bambu Lab", "build_volume_mm": [256, 256, 256],
+                  "bed_exclude_mm": [[0, 0, 18, 28]]},
     "bambu-p2s": {"name": "Bambu Lab P2S", "brand": "Bambu Lab", "build_volume_mm": [256, 256, 256]},
     "bambu-x1c": {"name": "Bambu Lab X1 Carbon", "brand": "Bambu Lab", "build_volume_mm": [256, 256, 256],
-                  "aliases": ["X1C", "X1", "X1 Carbon"]},
-    "bambu-x1e": {"name": "Bambu Lab X1E", "brand": "Bambu Lab", "build_volume_mm": [256, 256, 256]},
+                  "bed_exclude_mm": [[0, 0, 18, 28]], "aliases": ["X1C", "X1", "X1 Carbon"]},
+    "bambu-x1e": {"name": "Bambu Lab X1E", "brand": "Bambu Lab", "build_volume_mm": [256, 256, 256],
+                  "bed_exclude_mm": [[0, 0, 18, 28]]},
     "bambu-x2d": {"name": "Bambu Lab X2D", "brand": "Bambu Lab", "build_volume_mm": [256, 256, 260],
                   "dual_nozzle_volume_mm": [235.5, 256, 256]},
     "bambu-h2s": {"name": "Bambu Lab H2S", "brand": "Bambu Lab", "build_volume_mm": [340, 320, 340]},
