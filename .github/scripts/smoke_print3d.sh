@@ -210,6 +210,12 @@ r = arrange(wide, (256, 256, 256), 6.0, ex)
 assert r["pieces"]["p"]["fit"] == "fits", r
 o = outline_xy(placed(wide, r)["p"])
 assert o.intersection(corner).area < 1e-6 and o.bounds[0] >= -128.01 and o.bounds[3] <= 128.01, (o.bounds, r)
+# clear of the corner only when turned a quarter: turned, not blocked
+deep = {"p": trimesh.creation.box((255, 230, 5))}
+r = arrange(deep, (256, 256, 256), 6.0, ex)
+assert r["pieces"]["p"]["fit"] == "fits" and r["pieces"]["p"]["turn_deg"] % 180 == 90, r
+o = outline_xy(placed(deep, r)["p"])
+assert o.intersection(corner).area < 1e-6 and max(abs(v) for v in o.bounds) <= 128.01, (o.bounds, r)
 # printers: X1C keeps its front-left corner free; layouts made before that are stale for it, still current on the A1
 x1c, a1 = resolve({"preset": "bambu-x1c"}), resolve({"preset": "bambu-a1"})
 assert bed_exclude(x1c) == [[0.0, 0.0, 18.0, 28.0]] and bed_exclude(a1) == [], (bed_exclude(x1c), bed_exclude(a1))

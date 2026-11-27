@@ -448,8 +448,16 @@ def arrange(pieces: dict, bed, spacing: float, exclude=()) -> dict:
     for k, g in enumerate(alone, start=len(boards)):
         a, w, d = opts[g][1][0]
         fit, c = opts[g][0], (0.0, 0.0)
-        if g not in own:        # did not fit the grid: look for a spot clear of the excluded areas on the real outline
-            c = _free_spot(pieces[g], a, X, Y, exclude)
+        if g not in own:        # did not fit the grid: look for a spot clear of the excluded areas on the real outline,
+            c = None            # at every turn that fits the bed (and the same turned half way round)
+            for a2, w2, d2 in opts[g][1]:
+                for t in (a2, (a2 + 180) % 360):
+                    c = _free_spot(pieces[g], t, X, Y, exclude)
+                    if c is not None:
+                        a, w, d = t, w2, d2
+                        break
+                if c is not None:
+                    break
             if c is None:
                 fit, c = BLOCKED, (0.0, 0.0)
         out[g] = {"plate": k + 1, "turn_deg": float(a), "center_xy": [round(c[0], 3), round(c[1], 3)],
