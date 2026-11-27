@@ -335,16 +335,28 @@ def _spread(boards, X: float, Y: float) -> float:
     return total / max(weight, 1.0) / math.hypot(X, Y)
 
 
-def _covers(mesh, turn: float, X: float, Y: float, exclude) -> bool:
-    """Whether a piece turned by `turn` and centered on the bed covers any excluded area."""
+SPOT_STEPS = 24     # positions tried along each axis for a piece alone on its plate
+
+
+def _free_spot(mesh, turn: float, X: float, Y: float, exclude):
+    """Where a piece alone on its plate goes: the center of its bounding box relative to the bed's center, as near
+    the middle as its real outline (turned by `turn`) clears every excluded area, or None when no spot does."""
     if not exclude:
-        return False
+        return 0.0, 0.0
     from shapely.affinity import rotate, translate
     from shapely.geometry import box
     o = rotate(outline_xy(mesh), turn, origin=(0, 0))
     x0, y0, x1, y1 = o.bounds
-    o = translate(o, X / 2 - (x0 + x1) / 2, Y / 2 - (y0 + y1) / 2)
-    return any(o.intersects(box(*r)) for r in exclude)
+    o = translate(o, -(x0 + x1) / 2, -(y0 + y1) / 2)      # bounding box centered on (0, 0)
+    rx, ry = max(0.0, (X - (x1 - x0)) / 2), max(0.0, (Y - (y1 - y0)) / 2)
+    boxes = [box(*r) for r in exclude]
+    spots = sorted(((cx, cy) for cx in np.linspace(-rx, rx, 2 * SPOT_STEPS + 1)
+                    for cy in np.linspace(-ry, ry, 2 * SPOT_STEPS + 1)), key=lambda c: math.hypot(*c))
+    for cx, cy in spots:
+        p = translate(o, X / 2 + cx, Y / 2 + cy)
+        if all(p.intersection(b).area < 1e-6 for b in boxes):
+            return float(cx), float(cy)
+    return None
 
 
 def bed_exclude(printer: dict) -> list[list[float]]:
@@ -435,10 +447,12 @@ def arrange(pieces: dict, bed, spacing: float, exclude=()) -> dict:
                       "footprint_mm": [round(float(v), 2) for v in (bhi - blo)], "fit": opts[g][0]}
     for k, g in enumerate(alone, start=len(boards)):
         a, w, d = opts[g][1][0]
-        fit = opts[g][0]
-        if g not in own and _covers(pieces[g], a, X, Y, exclude):
-            fit = BLOCKED       # no spot on an empty plate avoids the excluded areas, and the middle covers one
-        out[g] = {"plate": k + 1, "turn_deg": float(a), "center_xy": [0.0, 0.0],
+        fit, c = opts[g][0], (0.0, 0.0)
+        if g not in own:        # did not fit the grid: look for a spot clear of the excluded areas on the real outline
+            c = _free_spot(pieces[g], a, X, Y, exclude)
+            if c is None:
+                fit, c = BLOCKED, (0.0, 0.0)
+        out[g] = {"plate": k + 1, "turn_deg": float(a), "center_xy": [round(c[0], 3), round(c[1], 3)],
                   "footprint_mm": [round(w, 2), round(d, 2)], "fit": fit}
     return {"bed_mm": [float(v) for v in bed], "spacing_mm": s, "edge_margin_mm": margin, "exclude_mm": exclude,
             "plates": len(boards) + len(alone), "plate_pitch_mm": X + PLATE_GAP_MM,
