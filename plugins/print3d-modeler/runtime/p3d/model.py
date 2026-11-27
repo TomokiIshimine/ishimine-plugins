@@ -11,7 +11,7 @@ import trimesh
 
 from .filament import hidden_parts, normalize_color, normalize_material, resolve_overlaps
 from .files import PARTS_JSON, part_stl, print_filament_stl, print_stl, write_json
-from .layout import arrange, placement_matrix
+from .layout import arrange, bed_exclude, placement_matrix
 from .meshutil import boolean, fuse, is_build123d, place_on_bed, round_list, to_trimesh, transformed
 
 # No blues, so parts never get confused with the bed-contact highlight (blue)
@@ -268,7 +268,7 @@ class LabeledModel:
             pm, M = place_on_bed(fused, cfg["rotation_deg"])
             posed[g] = (pm, M, cfg)
         lay = arrange({g: pm for g, (pm, _, _) in posed.items()}, printer["build_volume_mm"],
-                      printer["part_spacing_mm"])
+                      printer["part_spacing_mm"], bed_exclude(printer))
         multicolor = len(set(part_filaments.values()) - {None}) >= 2
         info = {}
         for g, (pm, M, cfg) in posed.items():
@@ -292,6 +292,7 @@ class LabeledModel:
                     info[g]["hidden_parts"] = [groups[g][i].id for i in hidden_parts(part_meshes, fids)]
                 info[g]["filaments"] = list(regions)
         summary = {"printer": printer["name"], "bed_mm": lay["bed_mm"], "spacing_mm": lay["spacing_mm"],
+                   "edge_margin_mm": lay["edge_margin_mm"], "exclude_mm": lay["exclude_mm"],
                    "plates": lay["plates"], "plate_pitch_mm": lay["plate_pitch_mm"]}
         return info, summary
 

@@ -25,10 +25,12 @@
     }
   },
   "print_layout": {
-    "$comment": "Layout of the print-pose pieces on the printer's bed (p3d.layout). matrix above already includes it. Plate k is centered at x = (k-1) * plate_pitch_mm; bed_fit is fits / diagonal / too_big.",
+    "$comment": "Layout of the print-pose pieces on the printer's bed (p3d.layout). matrix above already includes it. Plate k is centered at x = (k-1) * plate_pitch_mm; bed_fit is fits / diagonal / too_big. edge_margin_mm is how far the pieces keep from the bed's edges (15, or 10 / 5 / 0 when that saves a plate); exclude_mm the areas the printer keeps free ([x0, y0, x1, y1] from the bed's front-left corner).",
     "printer": "Bambu Lab A1 mini",
     "bed_mm": [180, 180, 180],
     "spacing_mm": 6,
+    "edge_margin_mm": 15,
+    "exclude_mm": [],
     "plates": 1,
     "plate_pitch_mm": 220
   },

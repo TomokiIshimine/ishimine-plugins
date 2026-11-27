@@ -8,10 +8,14 @@ which changes nothing about overhangs or bed contact, and moves it on the bed:
      grown by half of part_spacing_mm, and drawn on a grid of about 1 mm at every turn in 5° steps
   2. pieces are placed one by one, largest first, on the first plate where they fit: at every turn and every free
      spot, the one that keeps the plate's used area smallest wins, so L shapes nest into each other and small
-     pieces fill gaps and through-holes; a few orders and scores are tried and the result with the fewest plates
-     (then the tightest) is kept
+     pieces fill gaps and through-holes; a few orders, scores and starting points (the middle of the bed or its
+     corner) are tried, and the result with the fewest plates, then the one with the big pieces nearest the middle
+     of the bed, is kept
   3. what does not fit on plate 1 goes onto plate 2 and so on, and each plate's layout is centered on the bed
-  4. a piece that fits the bed at no angle, or is taller than the build height, gets a plate of its own and is
+  4. pieces keep away from the bed's edges, where the bed runs cooler and a brim has no room: 15 mm if that needs
+     no extra plate, else 10, 5 or 0 mm (the widest margin that keeps the fewest plates), and they never cover the
+     areas the printer keeps free (bed_exclude_mm, such as the front-left corner of the Bambu Lab X1 and P1 series)
+  5. a piece that fits the bed at no angle, or is taller than the build height, gets a plate of its own and is
      reported as too_big; a piece that fits only diagonally is reported as diagonal
 
 Coordinates of the result: in the print pose, with the center of plate 1's bed at (0, 0). Plate k (1-based)
@@ -28,6 +32,7 @@ ANGLE_STEP_DEG = 1      # search step for a piece that fits the bed only diagona
 PACK_STEP_DEG = 5       # turns tried when packing pieces together
 GRID_CELLS = 300        # the packing grid has about this many cells across the bed (at least 1 mm each)
 PLATE_GAP_MM = 40.0     # gap between plates when they are drawn side by side
+EDGE_MARGINS_MM = (15.0, 10.0, 5.0, 0.0)   # margins from the bed's edges, tried widest first
 
 FITS, DIAGONAL, TOO_BIG = "fits", "diagonal", "too_big"
 
@@ -131,34 +136,96 @@ class _Shape:
         X, Y = np.meshgrid(xs, ys, indexing="ij")
         self.mask = contains_xy(g, X, Y).astype(np.float32)
         self.cells = int(self.mask.sum())
+        self.ffts: dict = {}                                        # FFT of the flipped mask per FFT size
+
+
+def _blocked(X: float, Y: float, s: float, res: float, margin: float, exclude) -> np.ndarray:
+    """Cells of a plate's grid where no piece may go: a band of `margin` mm along the bed's edges and the printer's
+    excluded areas (rectangles in bed coordinates, front-left corner at 0, 0)."""
+    W, H = int((X + s) / res + EPS), int((Y + s) / res + EPS)
+    b = np.zeros((W, H), dtype=np.float32)
+    k = math.ceil(margin / res + 0.5) if margin > 0 else 0   # half a cell more, for the grid's rounding
+    if k:
+        b[:k, :] = b[-k:, :] = 1
+        b[:, :k] = b[:, -k:] = 1
+    for x0, y0, x1, y1 in exclude:
+        i0, i1 = max(0, math.floor((x0 + s / 2) / res)), min(W, math.ceil((x1 + s / 2) / res))
+        j0, j1 = max(0, math.floor((y0 + s / 2) / res)), min(H, math.ceil((y1 + s / 2) / res))
+        b[i0:i1, j0:j1] = 1
+    return b
+
+
+class _Grid:
+    """What every plate of one packing run shares: cell size, blocked cells and the FFTs used to find free spots.
+    FFT sizes come in a few steps (masks rounded up to 32 cells), so a plate's occupancy is transformed once per
+    step after each placement and each piece mask once per run; finding spots then costs one inverse FFT per turn."""
+
+    STEP = 32
+
+    def __init__(self, blocked: np.ndarray, s: float, res: float):
+        self.res, self.edge, self.blocked = res, -s / 2, blocked
+        self.has_blocked = bool(blocked.any())
+        self._blocked_f: dict = {}
+
+    def size(self, sh: _Shape) -> tuple[int, int]:
+        from scipy.fft import next_fast_len
+        W, H = self.blocked.shape
+        w, h = (-(-n // self.STEP) * self.STEP for n in sh.mask.shape)
+        return next_fast_len(W + w - 1, real=True), next_fast_len(H + h - 1, real=True)
+
+    def fft(self, a: np.ndarray, size):
+        from scipy.fft import rfft2
+        return rfft2(a, s=size, workers=-1)
+
+    def blocked_f(self, size):
+        f = self._blocked_f.get(size)
+        if f is None:
+            f = self._blocked_f[size] = self.fft(self.blocked, size)
+        return f
+
+    def overlap(self, occ_f, sh: _Shape, size) -> np.ndarray:
+        """Full correlation of the occupancy with the piece mask (overlap in cells for every offset)."""
+        from scipy.fft import irfft2
+        f = sh.ffts.get(size)
+        if f is None:
+            f = sh.ffts[size] = self.fft(sh.mask[::-1, ::-1], size)
+        return irfft2(occ_f * f, s=size, workers=-1)
 
 
 class _Board:
     """Occupancy grid of one plate. Cell (i, j) covers x in [-s/2 + i*res, ...), y likewise, so a piece grown
-    by s/2 may reach the bed edge."""
+    by s/2 may reach the bed edge; `blocked` cells (edge margin, excluded areas) start occupied."""
 
-    def __init__(self, X: float, Y: float, s: float, res: float):
-        self.res, self.edge = res, -s / 2
-        self.occ = np.zeros((int((X + s) / res + EPS), int((Y + s) / res + EPS)), dtype=np.float32)
-        self.box = None                                               # used cells (i0, j0, i1, j1)
+    def __init__(self, grid: _Grid):
+        self.grid = grid
+        self.res, self.edge = grid.res, grid.edge
+        self.blocked = grid.blocked
+        self.occ = grid.blocked.copy()
+        self.occ_f: dict = {}                                         # FFT of occ per FFT size, cleared on put
+        self.box = None                                               # cells used by pieces (i0, j0, i1, j1)
         self.pieces: list[tuple[str, _Shape, int, int]] = []
 
     def spots(self, sh: _Shape):
         """Free positions (i, j) arrays of the mask's corner, or None."""
-        from scipy.signal import fftconvolve
         W, H = self.occ.shape
         w, h = sh.mask.shape
         if w > W or h > H:
             return None
-        if self.box is None:
+        if self.box is None and not self.grid.has_blocked:            # nothing on the plate yet
             hit = np.zeros((W - w + 1, H - h + 1), dtype=bool)
         else:
-            hit = fftconvolve(self.occ, sh.mask[::-1, ::-1], mode="valid") > 0.5
+            size = self.grid.size(sh)
+            f = self.occ_f.get(size)
+            if f is None:
+                f = self.occ_f[size] = (self.grid.blocked_f(size) if self.box is None
+                                        else self.grid.fft(self.occ, size))
+            hit = self.grid.overlap(f, sh, size)[w - 1:W, h - 1:H] > 0.5
         ii, jj = np.nonzero(~hit)
         return (ii, jj) if len(ii) else None
 
-    def score(self, sh: _Shape, ii, jj, mode: str):
-        """Score of each position (lower is better): used area of the plate after placing, or its longer side."""
+    def score(self, sh: _Shape, ii, jj, mode: str, tie: str):
+        """Score of each position (lower is better): used area of the plate after placing, or its longer side.
+        Ties go toward the middle of the bed (tie="center") or its front-left corner (tie="corner")."""
         w, h = sh.mask.shape
         W, H = self.occ.shape
         if self.box is None:
@@ -169,12 +236,16 @@ class _Board:
             i1, j1 = np.maximum(b[2], ii + w), np.maximum(b[3], jj + h)
         area = (i1 - i0) * (j1 - j0) / (W * H)
         side = np.maximum((i1 - i0) / W, (j1 - j0) / H)
-        tie = (ii + jj) / (W + H) * 1e-3                             # toward the front-left corner
-        return (side + area * 1e-2 if mode == "side" else area + side * 1e-2) + tie
+        if tie == "center":
+            pos = np.abs(ii + (w - W) / 2) + np.abs(jj + (h - H) / 2)
+        else:
+            pos = ii + jj
+        return (side + area * 1e-2 if mode == "side" else area + side * 1e-2) + pos / (W + H) * 1e-3
 
     def put(self, name: str, sh: _Shape, i: int, j: int):
         w, h = sh.mask.shape
         self.occ[i:i + w, j:j + h] += sh.mask
+        self.occ_f = {}
         b = (i, j, i + w, j + h)
         self.box = b if self.box is None else (min(self.box[0], b[0]), min(self.box[1], b[1]),
                                                max(self.box[2], b[2]), max(self.box[3], b[3]))
@@ -185,19 +256,43 @@ class _Board:
         corner = np.array([self.edge + i * self.res, self.edge + j * self.res])
         return corner + (sh.lo - sh.origin), corner + (sh.hi - sh.origin)
 
+    def center_shift(self, X: float, Y: float) -> np.ndarray:
+        """Shift (mm) that centers the pieces on the bed, shortened when the full shift would push a piece into a
+        blocked cell (an excluded area)."""
+        boxes = [self.real_box(sh, i, j) for _, sh, i, j in self.pieces]
+        lo = np.min([b[0] for b in boxes], axis=0)
+        hi = np.max([b[1] for b in boxes], axis=0)
+        full = np.array([X / 2, Y / 2]) - (lo + hi) / 2
+        W, H = self.blocked.shape
+        for t in (1.0, 0.75, 0.5, 0.25):
+            di, dj = (int(round(v)) for v in full * t / self.res)
+            ok = True
+            for _, sh, i, j in self.pieces:
+                w, h = sh.mask.shape
+                a, c = i + di, j + dj
+                if a < 0 or c < 0 or a + w > W or c + h > H or (self.blocked[a:a + w, c:c + h] * sh.mask).sum() > 0.5:
+                    ok = False
+                    break
+            if ok:
+                return full * t
+        return np.zeros(2)
 
-def _pack(order, shapes, X, Y, s, res, mode, own):
-    """One greedy run. Returns (boards, alone) where alone are pieces put on plates of their own."""
+
+def _pack(order, shapes, grid, mode, tie, own, limit=None):
+    """One greedy run. Returns (boards, alone) where alone are pieces put on plates of their own, or None as soon as
+    more than `limit` plates would be needed."""
     boards: list[_Board] = []
     alone = []
     for g in order:
+        if limit is not None and len(boards) + len(alone) > limit:
+            return None
         if g in own:
             alone.append(g)
             continue
         done = False
         for b in boards + [None]:
             if b is None:
-                b = _Board(X, Y, s, res)
+                b = _Board(grid)
                 fresh = True
             else:
                 fresh = False
@@ -206,7 +301,7 @@ def _pack(order, shapes, X, Y, s, res, mode, own):
                 sp = b.spots(sh)
                 if sp is None:
                     continue
-                sc = b.score(sh, *sp, mode)
+                sc = b.score(sh, *sp, mode, tie)
                 k = int(np.argmin(sc))
                 if best is None or sc[k] < best[0] - 1e-9:
                     best = (sc[k], sh, int(sp[0][k]), int(sp[1][k]))
@@ -220,18 +315,47 @@ def _pack(order, shapes, X, Y, s, res, mode, own):
                 break
         if not done:          # fits the bed but not on the grid (a very tight fit): a plate of its own
             alone.append(g)
+    if limit is not None and len(boards) + len(alone) > limit:
+        return None
     return boards, alone
 
 
-def arrange(pieces: dict, bed, spacing: float) -> dict:
+def _spread(boards, X: float, Y: float) -> float:
+    """How far the pieces sit from the middle of the bed after centering, weighted by their size (lower is better):
+    big pieces near the middle, small ones toward the edges."""
+    total, weight = 0.0, 0.0
+    for b in boards:
+        shift = b.center_shift(X, Y)
+        for _, sh, i, j in b.pieces:
+            lo, hi = b.real_box(sh, i, j)
+            c = (lo + hi) / 2 + shift
+            total += sh.cells * float(np.hypot(c[0] - X / 2, c[1] - Y / 2))
+            weight += sh.cells
+    return total / max(weight, 1.0) / math.hypot(X, Y)
+
+
+def bed_exclude(printer: dict) -> list[list[float]]:
+    """Areas of the bed the printer keeps free (printer.json bed_exclude_mm: [x0, y0, x1, y1] rectangles in mm,
+    front-left corner of the build volume at 0, 0). The area both nozzles of a two-nozzle printer reach has none."""
+    if printer.get("nozzle_mode") == "dual":
+        return []
+    return [[float(v) for v in r] for r in printer.get("bed_exclude_mm") or []]
+
+
+def arrange(pieces: dict, bed, spacing: float, exclude=()) -> dict:
     """Lay out pieces ({name: mesh already in print pose}) on plates of the given bed.
 
-    Returns {"bed_mm", "spacing_mm", "plates", "plate_pitch_mm", "pieces": {name: {"plate", "turn_deg",
-    "center_xy", "footprint_mm", "fit"}}}; center_xy is the center of the piece's bounding box (after the turn)
-    relative to its plate's center.
+    exclude: areas of the bed no piece may cover ([x0, y0, x1, y1] in mm, front-left corner at 0, 0; see bed_exclude).
+    Pieces keep a margin from the bed's edges: the widest of EDGE_MARGINS_MM that needs no more plates than packing
+    up to the edges does.
+
+    Returns {"bed_mm", "spacing_mm", "edge_margin_mm", "exclude_mm", "plates", "plate_pitch_mm", "pieces": {name:
+    {"plate", "turn_deg", "center_xy", "footprint_mm", "fit"}}}; center_xy is the center of the piece's bounding box
+    (after the turn) relative to its plate's center.
     """
     X, Y = float(bed[0]), float(bed[1])
     s = float(spacing)
+    exclude = [[float(v) for v in r] for r in exclude]
     res = max(1.0, max(X, Y) / GRID_CELLS)
     opts, shapes, own = {}, {}, set()
     for g, m in pieces.items():
@@ -252,27 +376,47 @@ def arrange(pieces: dict, bed, spacing: float) -> dict:
     size = {g: max(max(sh.mask.shape) for sh in shapes[g]) if g in shapes else 0 for g in pieces}
     orders = [sorted(pieces, key=lambda g: (-area[g], g)), sorted(pieces, key=lambda g: (-size[g], -area[g], g))]
     need = max(1, math.ceil(sum(min(sh.cells for sh in shapes[g]) for g in shapes) * res * res / ((X + s) * (Y + s))))
-    best = None
-    for order in orders:
-        for mode in ("area", "side"):
-            boards, alone = _pack(order, shapes, X, Y, s, res, mode, own)
-            n = len(boards) + len(alone)
-            used = sum((b.box[2] - b.box[0]) * (b.box[3] - b.box[1]) for b in boards)
-            if best is None or (n, used) < best[0]:
-                best = ((n, used), boards, alone)
-        if best[0][0] <= need + len(own):
-            break
-    _, boards, alone = best
+    floor = need + len(own)                         # no packing can use fewer plates
+
+    def run(margin: float, limit=None):
+        """Best layout with this edge margin: fewest plates, then big pieces nearest the middle. None when every try
+        needs more than `limit` plates."""
+        grid = _Grid(_blocked(X, Y, s, res, margin, exclude), s, res)
+        best = None
+        for order in orders:
+            for mode in ("area", "side"):
+                for tie in ("center", "corner"):
+                    r = _pack(order, shapes, grid, mode, tie, own, limit)
+                    if r is None:
+                        continue
+                    key = (len(r[0]) + len(r[1]), _spread(r[0], X, Y))
+                    if best is None or key < best[0]:
+                        best = (key, *r)
+            if best is not None and best[0][0] <= floor:
+                break
+        return None if best is None else (best[0][0], best[1], best[2])
+
+    margin = EDGE_MARGINS_MM[0]
+    chosen = run(margin)
+    if chosen[0] > floor:                           # maybe a narrower margin needs fewer plates
+        fewest, margin = run(0.0), 0.0
+        if chosen[0] <= fewest[0]:
+            margin, fewest = EDGE_MARGINS_MM[0], chosen
+        else:
+            for m in EDGE_MARGINS_MM[1:-1]:
+                r = run(m, fewest[0])
+                if r is not None:
+                    margin, fewest = m, r
+                    break
+        chosen = fewest
+    _, boards, alone = chosen
 
     out = {}
     for k, b in enumerate(boards):
-        boxes = {g: b.real_box(sh, i, j) for g, sh, i, j in b.pieces}
-        lo = np.min([v[0] for v in boxes.values()], axis=0)
-        hi = np.max([v[1] for v in boxes.values()], axis=0)
-        shift = -(lo + hi) / 2
-        for g, sh, _, _ in b.pieces:
-            blo, bhi = boxes[g]
-            c = (blo + bhi) / 2 + shift
+        shift = b.center_shift(X, Y)
+        for g, sh, i, j in b.pieces:
+            blo, bhi = b.real_box(sh, i, j)
+            c = (blo + bhi) / 2 + shift - np.array([X / 2, Y / 2])
             out[g] = {"plate": k + 1, "turn_deg": float(sh.angle % 360),
                       "center_xy": [round(float(c[0]), 3), round(float(c[1]), 3)],
                       "footprint_mm": [round(float(v), 2) for v in (bhi - blo)], "fit": opts[g][0]}
@@ -280,14 +424,17 @@ def arrange(pieces: dict, bed, spacing: float) -> dict:
         a, w, d = opts[g][1][0]
         out[g] = {"plate": k + 1, "turn_deg": float(a), "center_xy": [0.0, 0.0],
                   "footprint_mm": [round(w, 2), round(d, 2)], "fit": opts[g][0]}
-    return {"bed_mm": [float(v) for v in bed], "spacing_mm": s, "plates": len(boards) + len(alone),
-            "plate_pitch_mm": X + PLATE_GAP_MM, "pieces": {g: out[g] for g in pieces}}
+    return {"bed_mm": [float(v) for v in bed], "spacing_mm": s, "edge_margin_mm": margin, "exclude_mm": exclude,
+            "plates": len(boards) + len(alone), "plate_pitch_mm": X + PLATE_GAP_MM,
+            "pieces": {g: out[g] for g in pieces}}
 
 
 def is_current(layout: dict | None, printer: dict) -> bool:
-    """Whether a print_layout from parts.json was made with the printer's current bed and part spacing."""
+    """Whether a print_layout from parts.json was made with the printer's current bed, part spacing and excluded
+    areas (layouts from before excluded areas were known count as made without any)."""
     return (bool(layout) and [float(v) for v in layout["bed_mm"]] == [float(v) for v in printer["build_volume_mm"]]
-            and float(layout["spacing_mm"]) == float(printer["part_spacing_mm"]))
+            and float(layout["spacing_mm"]) == float(printer["part_spacing_mm"])
+            and [[float(v) for v in r] for r in layout.get("exclude_mm") or []] == bed_exclude(printer))
 
 
 def placement_matrix(mesh, piece: dict, plate_pitch: float) -> np.ndarray:

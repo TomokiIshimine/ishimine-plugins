@@ -152,6 +152,60 @@ print("nesting ok", {g: p["turn_deg"] for g, p in r["pieces"].items()}, "gap", r
 PY
 end
 
+step "p3d.layout (edge margin, big pieces in the middle, excluded areas)"
+"$PY" - <<'PY'
+import itertools
+import trimesh
+from shapely.geometry import box as rect
+from p3d.layout import arrange, bed_exclude, is_current, outline_xy, placement_matrix
+from p3d.printer import resolve
+
+
+def placed(pieces, r, plate=1):
+    out = {}
+    for g, m in pieces.items():
+        if r["pieces"][g]["plate"] != plate:
+            continue
+        m = m.copy()
+        m.apply_transform(placement_matrix(m, r["pieces"][g], r["plate_pitch_mm"]))
+        out[g] = m
+    return out
+
+
+def edge_gap(ms, bed):
+    return min(min(m.bounds[0][0] + bed / 2, m.bounds[0][1] + bed / 2, bed / 2 - m.bounds[1][0], bed / 2 - m.bounds[1][1])
+               for m in ms.values())
+
+
+# a few pieces: 15 mm from the edges, and the big one near the middle of the bed
+pieces = {"big": trimesh.creation.box((100, 100, 5))}
+pieces.update({f"s{i}": trimesh.creation.box((15, 15, 5)) for i in range(6)})
+r = arrange(pieces, (256, 256, 256), 6.0)
+assert r["plates"] == 1 and r["edge_margin_mm"] == 15.0, r
+ms = placed(pieces, r)
+assert edge_gap(ms, 256) >= 14.0, edge_gap(ms, 256)
+c = ms["big"].bounds.mean(axis=0)
+assert abs(c[0]) < 30 and abs(c[1]) < 30, f"big piece far from the middle: {c}"
+# a crowded plate: the widest margin that still fits one plate, and never over the excluded corner
+crowd = {f"b{i}": trimesh.creation.box((70, 70, 5)) for i in range(9)}
+ex = [[0, 0, 18, 28]]
+r = arrange(crowd, (256, 256, 256), 6.0, ex)
+assert r["plates"] == 1 and 0 < r["edge_margin_mm"] < 15, r
+ms = placed(crowd, r)
+corner = rect(-128, -128, -128 + 18, -128 + 28)
+outlines = {g: outline_xy(m) for g, m in ms.items()}
+assert all(o.distance(corner) >= 3.0 - 1e-6 for o in outlines.values()), {g: o.distance(corner) for g, o in outlines.items()}
+assert min(a.distance(b) for a, b in itertools.combinations(outlines.values(), 2)) >= 6.0 - 1e-6
+assert edge_gap(ms, 256) >= r["edge_margin_mm"] - 1.0, (edge_gap(ms, 256), r["edge_margin_mm"])
+# printers: X1C keeps its front-left corner free; layouts made before that are stale for it, still current on the A1
+x1c, a1 = resolve({"preset": "bambu-x1c"}), resolve({"preset": "bambu-a1"})
+assert bed_exclude(x1c) == [[0.0, 0.0, 18.0, 28.0]] and bed_exclude(a1) == [], (bed_exclude(x1c), bed_exclude(a1))
+old = {"bed_mm": [256, 256, 256], "spacing_mm": 6}
+assert not is_current(old, x1c) and is_current(old, a1)
+print("edge margin ok", r["edge_margin_mm"])
+PY
+end
+
 step "p3d.export (two objects with the same label on one plate)"
 D="${WORK}/same-label"
 rm -rf "$D" && mkdir -p "$D"
