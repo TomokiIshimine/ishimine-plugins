@@ -25,7 +25,7 @@ import trimesh
 from .bambu import max_filaments
 from .filament import normalize_material, used_filaments
 from .files import ANALYSIS_JSON, load_dir, load_mesh, print_filament_stl, print_stl, write_json
-from .layout import DIAGONAL, EDGE_MARGINS_MM, bed_exclude, fits_bed, is_current
+from .layout import BLOCKED, DIAGONAL, EDGE_MARGINS_MM, bed_exclude, fits_bed, is_current
 from .meshutil import boolean, direction_label, fuse, np_default, place_on_bed, round_list, transformed
 from .print_settings import with_layer_height
 from .printer import load_printer
@@ -462,6 +462,12 @@ def _check_layout(pj: dict, lim: Limits, f: Findings) -> dict:
               suggestion="Fine for small PLA pieces. Near the edge the bed runs cooler and a brim has little room, so "
                          "for large flat pieces or warp-prone materials (ABS, ASA, PETG) mention it in the print notes")
     for g, gi in groups.items():
+        if gi.get("bed_fit") == BLOCKED:
+            f.add("major", f"[{g}] Fits the bed of {name} only over an area the printer keeps free "
+                  f"(such as the front-left corner): it cannot be placed", check="layout",
+                  evidence=f"footprint {gi['size_mm'][0]}×{gi['size_mm'][1]} mm, areas kept free "
+                           f"{lay.get('exclude_mm', [])} on a {vol[0]:g}×{vol[1]:g} mm bed",
+                  suggestion="Scale the piece down or split it so it clears the area kept free")
         if gi.get("bed_fit") == DIAGONAL:
             f.add("info", f"[{g}] Fits the bed only when turned {gi['bed_turn_deg']:g}° about Z (diagonally); "
                   "the layout and the exported files are already turned", check="layout",

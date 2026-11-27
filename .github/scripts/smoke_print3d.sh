@@ -197,6 +197,13 @@ outlines = {g: outline_xy(m) for g, m in ms.items()}
 assert all(o.distance(corner) >= 3.0 - 1e-6 for o in outlines.values()), {g: o.distance(corner) for g, o in outlines.items()}
 assert min(a.distance(b) for a, b in itertools.combinations(outlines.values(), 2)) >= 6.0 - 1e-6
 assert edge_gap(ms, 256) >= r["edge_margin_mm"] - 1.0, (edge_gap(ms, 256), r["edge_margin_mm"])
+# one big piece: the margin narrows until it fits, and a piece that only fits over the excluded corner is blocked
+r = arrange({"p": trimesh.creation.box((240, 240, 5))}, (256, 256, 256), 6.0)
+assert r["edge_margin_mm"] == 5.0 and r["pieces"]["p"]["fit"] == "fits", r
+r = arrange({"p": trimesh.creation.box((200, 200, 5))}, (256, 256, 256), 6.0, ex)
+assert r["edge_margin_mm"] == 15.0 and r["pieces"]["p"]["fit"] == "fits", r
+r = arrange({"p": trimesh.creation.box((250, 250, 5))}, (256, 256, 256), 6.0, ex)
+assert r["edge_margin_mm"] == 0.0 and r["pieces"]["p"]["fit"] == "blocked", r
 # printers: X1C keeps its front-left corner free; layouts made before that are stale for it, still current on the A1
 x1c, a1 = resolve({"preset": "bambu-x1c"}), resolve({"preset": "bambu-a1"})
 assert bed_exclude(x1c) == [[0.0, 0.0, 18.0, 28.0]] and bed_exclude(a1) == [], (bed_exclude(x1c), bed_exclude(a1))

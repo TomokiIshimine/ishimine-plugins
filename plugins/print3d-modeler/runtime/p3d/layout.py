@@ -16,7 +16,8 @@ which changes nothing about overhangs or bed contact, and moves it on the bed:
      no extra plate, else 10, 5 or 0 mm (the widest margin that keeps the fewest plates), and they never cover the
      areas the printer keeps free (bed_exclude_mm, such as the front-left corner of the Bambu Lab X1 and P1 series)
   5. a piece that fits the bed at no angle, or is taller than the build height, gets a plate of its own and is
-     reported as too_big; a piece that fits only diagonally is reported as diagonal
+     reported as too_big; a piece that fits only diagonally is reported as diagonal, and one that fits the bed
+     only over an area the printer keeps free is reported as blocked
 
 Coordinates of the result: in the print pose, with the center of plate 1's bed at (0, 0). Plate k (1-based)
 is drawn at x = (k - 1) * plate_pitch_mm, so every plate can be shown side by side.
@@ -34,7 +35,7 @@ GRID_CELLS = 300        # the packing grid has about this many cells across the 
 PLATE_GAP_MM = 40.0     # gap between plates when they are drawn side by side
 EDGE_MARGINS_MM = (15.0, 10.0, 5.0, 0.0)   # margins from the bed's edges, tried widest first
 
-FITS, DIAGONAL, TOO_BIG = "fits", "diagonal", "too_big"
+FITS, DIAGONAL, TOO_BIG, BLOCKED = "fits", "diagonal", "too_big", "blocked"
 
 
 def hull_xy(mesh) -> np.ndarray:
@@ -334,6 +335,18 @@ def _spread(boards, X: float, Y: float) -> float:
     return total / max(weight, 1.0) / math.hypot(X, Y)
 
 
+def _covers(mesh, turn: float, X: float, Y: float, exclude) -> bool:
+    """Whether a piece turned by `turn` and centered on the bed covers any excluded area."""
+    if not exclude:
+        return False
+    from shapely.affinity import rotate, translate
+    from shapely.geometry import box
+    o = rotate(outline_xy(mesh), turn, origin=(0, 0))
+    x0, y0, x1, y1 = o.bounds
+    o = translate(o, X / 2 - (x0 + x1) / 2, Y / 2 - (y0 + y1) / 2)
+    return any(o.intersects(box(*r)) for r in exclude)
+
+
 def bed_exclude(printer: dict) -> list[list[float]]:
     """Areas of the bed the printer keeps free (printer.json bed_exclude_mm: [x0, y0, x1, y1] rectangles in mm,
     front-left corner of the build volume at 0, 0). The area both nozzles of a two-nozzle printer reach has none."""
@@ -387,8 +400,8 @@ def arrange(pieces: dict, bed, spacing: float, exclude=()) -> dict:
             for mode in ("area", "side"):
                 for tie in ("center", "corner"):
                     r = _pack(order, shapes, grid, mode, tie, own, limit)
-                    if r is None:
-                        continue
+                    if r is None or (margin > 0 and any(g not in own for g in r[1])):
+                        continue        # a piece that misses the margin or an excluded area is not a fit here
                     key = (len(r[0]) + len(r[1]), _spread(r[0], X, Y))
                     if best is None or key < best[0]:
                         best = (key, *r)
@@ -398,9 +411,9 @@ def arrange(pieces: dict, bed, spacing: float, exclude=()) -> dict:
 
     margin = EDGE_MARGINS_MM[0]
     chosen = run(margin)
-    if chosen[0] > floor:                           # maybe a narrower margin needs fewer plates
+    if chosen is None or chosen[0] > floor:         # maybe a narrower margin fits, or needs fewer plates
         fewest, margin = run(0.0), 0.0
-        if chosen[0] <= fewest[0]:
+        if chosen is not None and chosen[0] <= fewest[0]:
             margin, fewest = EDGE_MARGINS_MM[0], chosen
         else:
             for m in EDGE_MARGINS_MM[1:-1]:
@@ -422,8 +435,11 @@ def arrange(pieces: dict, bed, spacing: float, exclude=()) -> dict:
                       "footprint_mm": [round(float(v), 2) for v in (bhi - blo)], "fit": opts[g][0]}
     for k, g in enumerate(alone, start=len(boards)):
         a, w, d = opts[g][1][0]
+        fit = opts[g][0]
+        if g not in own and _covers(pieces[g], a, X, Y, exclude):
+            fit = BLOCKED       # no spot on an empty plate avoids the excluded areas, and the middle covers one
         out[g] = {"plate": k + 1, "turn_deg": float(a), "center_xy": [0.0, 0.0],
-                  "footprint_mm": [round(w, 2), round(d, 2)], "fit": opts[g][0]}
+                  "footprint_mm": [round(w, 2), round(d, 2)], "fit": fit}
     return {"bed_mm": [float(v) for v in bed], "spacing_mm": s, "edge_margin_mm": margin, "exclude_mm": exclude,
             "plates": len(boards) + len(alone), "plate_pitch_mm": X + PLATE_GAP_MM,
             "pieces": {g: out[g] for g in pieces}}
